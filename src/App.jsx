@@ -186,8 +186,12 @@ function EventCard({ event, onClick, lang }) {
       onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
       onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
     >
-      <div style={{ background: `${Orange}22`, height: 120, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 40 }}>🎉</span>
+    <div style={{ background: `${Orange}22`, height: 120, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+  {event.image_url ? (
+    <img src={event.image_url} alt={event.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+  ) : (
+    <span style={{ fontSize: 40 }}>🎉</span>
+  )}
         <div style={{ position: "absolute", top: 8, right: 8, background: Orange, color: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
           {event.price}
         </div>
@@ -391,8 +395,12 @@ function EventDetail({ event, onBack, lang }) {
         <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#111" }}>{isAr ? "→" : "←"}</button>
         <span style={{ fontWeight: 700, fontSize: 16, color: "#111" }}>{event.name}</span>
       </div>
-      <div style={{ background: `${Orange}22`, height: 200, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-        <span style={{ fontSize: 72 }}>🎉</span>
+      <div style={{ background: `${Orange}22`, height: 200, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+  {event.image_url ? (
+    <img src={event.image_url} alt={event.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+  ) : (
+    <span style={{ fontSize: 72 }}>🎉</span>
+  )}
         <div style={{ position: "absolute", top: 12, right: isAr ? "auto" : 12, left: isAr ? 12 : "auto", background: Orange, color: "#fff", borderRadius: 8, padding: "4px 14px", fontSize: 13, fontWeight: 700 }}>
           {event.price}
         </div>
@@ -437,10 +445,12 @@ function EventDetail({ event, onBack, lang }) {
 }
 
 function AdminScreen({ onBack, lang, onEventPublished }) {
+  const [imageUrl, setImageUrl] = useState("");
   const t = translations[lang];
   const isAr = lang === "ar";
   const [activeTab, setActiveTab] = useState("create");
   const [eventName, setEventName] = useState("");
+
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -454,86 +464,6 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
   const [reservations, setReservations] = useState([]);
   const [loadingRes, setLoadingRes] = useState(false);
   
-
-  //password line
- 
-// i deleted it because it asks the admin for a password
-  
-  /*const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-
-
-
-  // ← Change this to your own secret password
-  const ADMIN_PASSWORD = "eventi2024";
-
-   useEffect(() => {
-    if (activeTab !== "reservations") return;
-    const fetchReservations = async () => {
-      setLoadingRes(true);
-      const { data } = await supabase
-        .from("reservations")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setReservations(data || []);
-      setLoadingRes(false);
-    };
-    fetchReservations();
-  }, [activeTab]);
-
-
-  if (!isAuthenticated) return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, padding: 20, background: "#f8f8f8" }}>
-      <span style={{ fontSize: 56 }}>🔐</span>
-      <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>Admin Access</div>
-      <div style={{ fontSize: 13, color: "#999", marginBottom: 8 }}>Enter your password to continue</div>
-      <input
-        type="password"
-        placeholder="Enter password"
-        value={password}
-        onChange={e => setPassword(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === "Enter") {
-            if (password === ADMIN_PASSWORD) {
-              setIsAuthenticated(true);
-            } else {
-              setPasswordError("Incorrect password. Try again.");
-            }
-          }
-        }}
-        style={{
-          width: "100%", padding: "12px 16px", borderRadius: 14,
-          border: `1px solid ${passwordError ? "red" : "#eee"}`,
-          background: "#fff", fontSize: 14, outline: "none",
-          boxSizing: "border-box", textAlign: "center", letterSpacing: 4
-        }}
-      />
-      {passwordError && <div style={{ color: "red", fontSize: 12 }}>{passwordError}</div>}
-      <button
-        onClick={() => {
-          if (password === ADMIN_PASSWORD) {
-            setIsAuthenticated(true);
-          } else {
-            setPasswordError("Incorrect password. Try again.");
-          }
-        }}
-        style={{
-          width: "100%", padding: 14, borderRadius: 16, border: "none",
-          background: Orange, color: "#fff", fontSize: 15,
-          fontWeight: 700, cursor: "pointer"
-        }}
-      >
-        🔓 Enter Admin
-      </button>
-      <button onClick={onBack} style={{ background: "none", border: "none", color: "#999", fontSize: 13, cursor: "pointer" }}>
-        ← Go Back
-      </button>
-    </div>
-  );
-  */
- 
-  //password line above
 
 
 
@@ -555,7 +485,7 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
     setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, distance: "Nearby",
+        name: eventName, category: selectedCat, image_url: imageUrl, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: 29.3759, lng: 47.9774,
         description: description || "No description provided.",
@@ -624,6 +554,38 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
             <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.eventName}</label>
             <input style={inputStyle} placeholder={isAr ? "مثال: مهرجان الصيف" : "e.g. Summer Food Festival"} value={eventName} onChange={e => setEventName(e.target.value)} />
           </div>
+
+
+
+<div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Event Image (optional)</label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+     const { error: uploadError } = await supabase.storage
+  .from("event-images")
+  .upload(fileName, file);
+    if (uploadError) {
+  console.error(uploadError);
+  return;
+}
+      const { data: urlData } = supabase.storage
+        .from("event-images")
+        .getPublicUrl(fileName);
+      setImageUrl(urlData.publicUrl);
+    }}
+    style={{ width: "100%", padding: "10px 0", fontSize: 13, color: "#999", cursor: "pointer" }}
+  />
+  {imageUrl && (
+    <img src={imageUrl} alt="preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
+  )}
+</div>
+
           <div>
             <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>{t.category}</label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -914,9 +876,11 @@ function ProfileScreen({ user, userProfile, onLogout, lang }) {
 }
 
 function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
+ const [imageUrl, setImageUrl] = useState("");
   const t = translations[lang];
   const isAr = lang === "ar";
   const [eventName, setEventName] = useState("");
+
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -954,7 +918,7 @@ function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
     setIsPublishing(true); setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, distance: "Nearby",
+        name: eventName, category: selectedCat, image_url: imageUrl, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: 29.3759, lng: 47.9774,
         description: description || "No description provided.",
@@ -1023,6 +987,37 @@ function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
             <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.noOfBooths}</label>
               <input style={inputStyle} placeholder="20" value={booths} onChange={e => setBooths(e.target.value)} type="number" /></div>
           </div>
+
+
+  <div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Event Image (optional)</label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+  .from("event-images")
+  .upload(fileName, file);
+     if (uploadError) {
+  console.error(uploadError);
+  return;
+}
+      const { data: urlData } = supabase.storage
+        .from("event-images")
+        .getPublicUrl(fileName);
+      setImageUrl(urlData.publicUrl);
+    }}
+    style={{ width: "100%", padding: "10px 0", fontSize: 13, color: "#999", cursor: "pointer" }}
+  />
+  {imageUrl && (
+    <img src={imageUrl} alt="preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
+  )}
+</div>
+          
           <div><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.description}</label>
             <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} placeholder="Tell people about your event..." value={description} onChange={e => setDescription(e.target.value)} /></div>
           {error && <div style={{ color: "red", fontSize: 12, textAlign: "center" }}>{error}</div>}
