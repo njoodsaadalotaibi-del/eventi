@@ -568,14 +568,14 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
       const fileExt = file.name.split(".").pop();
       const fileName = `${Math.random()}.${fileExt}`;
      const { error: uploadError } = await supabase.storage
-  .from("event-images")
+  .from("event-image")
   .upload(fileName, file);
     if (uploadError) {
   console.error(uploadError);
   return;
 }
       const { data: urlData } = supabase.storage
-        .from("event-images")
+        .from("event-image")
         .getPublicUrl(fileName);
       setImageUrl(urlData.publicUrl);
     }}
@@ -1000,14 +1000,14 @@ function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
       const fileExt = file.name.split(".").pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
-  .from("event-images")
+  .from("event-image")
   .upload(fileName, file);
      if (uploadError) {
   console.error(uploadError);
   return;
 }
       const { data: urlData } = supabase.storage
-        .from("event-images")
+        .from("event-image")
         .getPublicUrl(fileName);
       setImageUrl(urlData.publicUrl);
     }}
