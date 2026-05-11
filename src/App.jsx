@@ -762,7 +762,7 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
   );
 }
 
-function ProfileScreen({ user, userProfile, onLogout, lang }) {
+function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
   const t = translations[lang];
   const isAr = lang === "ar";
   const [myReservations, setMyReservations] = useState([]);
@@ -804,12 +804,15 @@ function ProfileScreen({ user, userProfile, onLogout, lang }) {
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr" }}>
-      <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #eee" }}>
-        <span style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{t.profile}</span>
-        <button onClick={onLogout} style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid #eee", background: "transparent", color: "#999", fontSize: 12, cursor: "pointer" }}>
-          {t.logout}
-        </button>
-      </div>
+     <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #eee" }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#111" }}>←</button>
+    <span style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{t.profile}</span>
+  </div>
+  <button onClick={onLogout} style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid #eee", background: "transparent", color: "#999", fontSize: 12, cursor: "pointer" }}>
+    {t.logout}
+  </button>
+</div>
       <div style={{ padding: 20 }}>
         <div style={{ background: "#fff", borderRadius: 20, padding: 20, marginBottom: 16, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <div style={{ width: 64, height: 64, borderRadius: "50%", background: `${Orange}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 12px" }}>
