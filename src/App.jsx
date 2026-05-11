@@ -806,7 +806,7 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr" }}>
      <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #eee" }}>
   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-    <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#111" }}>←</button>
+   <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#FF5722", fontWeight: 700 }}>←</button>
     <span style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{t.profile}</span>
   </div>
   <button onClick={onLogout} style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid #eee", background: "transparent", color: "#999", fontSize: 12, cursor: "pointer" }}>
