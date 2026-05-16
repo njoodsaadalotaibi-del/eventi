@@ -463,9 +463,16 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
   const [published, setPublished] = useState(false);
   const [reservations, setReservations] = useState([]);
   const [loadingRes, setLoadingRes] = useState(false);
-  
 
-
+  useEffect(() => {
+    const fetchReservations = async () => {
+      setLoadingRes(true);
+      const { data } = await supabase.from("reservations").select("*").order("created_at", { ascending: false });
+      setReservations(data || []);
+      setLoadingRes(false);
+    };
+    fetchReservations();
+  }, []);
 
   const updateStatus = async (id, status) => {
     await supabase.from("reservations").update({ status }).eq("id", id);
@@ -725,9 +732,8 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", padding: 24, background: "#f8f8f8", direction: isAr ? "rtl" : "ltr" }}>
-      <div style={{ fontSize: 56, marginBottom: 8 }}>🎉</div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: "#111", marginBottom: 4 }}>eventi</div>
-      <div style={{ fontSize: 13, color: "#999", marginBottom: 32 }}>{isLogin ? t.login : t.signup}</div>
+      <img src="/mainEventi.png" alt="eventi" style={{ width: 160, height: 160, objectFit: "contain", marginBottom: 8 }} />
+      <div style={{ marginBottom: 32 }} />
       <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
         {!isLogin && (
           <div>
@@ -1127,10 +1133,19 @@ export default function App() {
       <div style={{ background: "#fff", padding: "16px 20px", borderBottom: "1px solid #eee" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 22, color: "#111" }}>{t.title}</div>
+
+           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+  <img src="/faviconapp.png" alt="eventi" style={{ height: 32, width: 32, objectFit: "contain" }} />
+  <div style={{ fontWeight: 700, fontSize: 22, color: "#111" }}>{t.title}</div>
+</div>
+          
+          
+          
             <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>
               <span style={{ color: Orange, fontWeight: 700 }}>{events.length}</span> {t.subtitle}
             </div>
+
+
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setLang(lang === "en" ? "ar" : "en")} style={{
