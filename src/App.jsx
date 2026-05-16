@@ -826,15 +826,17 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
           </div>
           <div style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{userProfile?.name || user.email}</div>
           <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>{user.email}</div>
-          <div style={{ marginTop: 8 }}>
-            <span style={{
-              padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: userProfile?.role === "admin" ? "#FFEBEE" : userProfile?.role === "organizer" ? "#F3E8FF" : "#E8FDF5",
-              color: userProfile?.role === "admin" ? "#c62828" : userProfile?.role === "organizer" ? "#6B21A8" : "#065F46"
-            }}>
-              {userProfile?.role === "admin" ? "👑 Admin" : userProfile?.role === "organizer" ? "🎪 Organizer" : "🎉 Consumer"}
-            </span>
-          </div>
+          {userProfile?.role !== "consumer" && (
+            <div style={{ marginTop: 8 }}>
+              <span style={{
+                padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                background: userProfile?.role === "admin" ? "#FFEBEE" : "#F3E8FF",
+                color: userProfile?.role === "admin" ? "#c62828" : "#6B21A8"
+              }}>
+                {userProfile?.role === "admin" ? "👑 Admin" : "🎪 Organizer"}
+              </span>
+            </div>
+          )}
         </div>
 
         {userProfile?.role === "consumer" && (
