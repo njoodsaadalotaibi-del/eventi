@@ -470,6 +470,10 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
   const [orgRequests, setOrgRequests] = useState([]);
 const [loadingOrg, setLoadingOrg] = useState(false);
 
+const [locationSuggestions, setLocationSuggestions] = useState([]);
+const [lat, setLat] = useState(29.3759);
+const [lng, setLng] = useState(47.9774);
+
 
 
 useEffect(() => {
@@ -526,7 +530,7 @@ useEffect(() => {
       const newEvent = {
         name: eventName, category: selectedCat, image_url: imageUrl, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
-        lat: 29.3759, lng: 47.9774,
+        lat: lat, lng: lng,
         description: description || "No description provided.",
         host: "eventi organizer", time: time || "TBD",
         booths: parseInt(booths) || 10, location,
@@ -641,10 +645,48 @@ useEffect(() => {
               ))}
             </div>
           </div>
-          <div>
-            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.location}</label>
-            <input style={inputStyle} placeholder={isAr ? "مثال: الكويت" : "e.g. Kuwait City, Kuwait"} value={location} onChange={e => setLocation(e.target.value)} />
-          </div>
+          <div style={{ position: "relative" }}>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.location}</label>
+  <input
+    style={inputStyle}
+    placeholder={isAr ? "مثال: الكويت" : "Search for a location..."}
+    value={location}
+    onChange={async (e) => {
+      setLocation(e.target.value);
+      if (e.target.value.length < 3) { setLocationSuggestions([]); return; }
+      try {
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(e.target.value)}&key=${GOOGLE_MAPS_KEY}`
+        );
+        const data = await res.json();
+        setLocationSuggestions(data.results?.slice(0, 4) || []);
+      } catch (err) {
+        console.error(err);
+      }
+    }}
+  />
+  {locationSuggestions.length > 0 && (
+    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
+      {locationSuggestions.map((place, i) => (
+        <div
+          key={i}
+          onClick={() => {
+            setLocation(place.formatted_address);
+            setLat(place.geometry.location.lat);
+            setLng(place.geometry.location.lng);
+            setLocationSuggestions([]);
+          }}
+          style={{ padding: "10px 14px", fontSize: 13, color: "#111", cursor: "pointer", borderBottom: "1px solid #f5f5f5" }}
+          onMouseEnter={e => e.currentTarget.style.background = "#f8f8f8"}
+          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+        >
+          📍 {place.formatted_address}
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.date}</label>
@@ -962,6 +1004,9 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
 function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
 
 
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+const [lat, setLat] = useState(29.3759);
+const [lng, setLng] = useState(47.9774);
 
  const [imageUrl, setImageUrl] = useState("");
   const t = translations[lang];
@@ -1012,7 +1057,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
       const newEvent = {
         name: eventName, category: selectedCat, image_url: imageUrl, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
-        lat: 29.3759, lng: 47.9774,
+        lat: lat, lng: lng,
         description: description || "No description provided.",
         host: userProfile?.name || "Organizer",
         time: time || "TBD", booths: parseInt(booths) || 10, location,
@@ -1085,8 +1130,47 @@ if (showBoothMap && publishedEvent) return (
               ))}
             </div>
           </div>
-          <div><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.location}</label>
-            <input style={inputStyle} placeholder="e.g. Kuwait City" value={location} onChange={e => setLocation(e.target.value)} /></div>
+         <div style={{ position: "relative" }}>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.location}</label>
+  <input
+    style={inputStyle}
+    placeholder={isAr ? "مثال: الكويت" : "Search for a location..."}
+    value={location}
+    onChange={async (e) => {
+      setLocation(e.target.value);
+      if (e.target.value.length < 3) { setLocationSuggestions([]); return; }
+      try {
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(e.target.value)}&key=${GOOGLE_MAPS_KEY}`
+        );
+        const data = await res.json();
+        setLocationSuggestions(data.results?.slice(0, 4) || []);
+      } catch (err) {
+        console.error(err);
+      }
+    }}
+  />
+  {locationSuggestions.length > 0 && (
+    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
+      {locationSuggestions.map((place, i) => (
+        <div
+          key={i}
+          onClick={() => {
+            setLocation(place.formatted_address);
+            setLat(place.geometry.location.lat);
+            setLng(place.geometry.location.lng);
+            setLocationSuggestions([]);
+          }}
+          style={{ padding: "10px 14px", fontSize: 13, color: "#111", cursor: "pointer", borderBottom: "1px solid #f5f5f5" }}
+          onMouseEnter={e => e.currentTarget.style.background = "#f8f8f8"}
+          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+        >
+          📍 {place.formatted_address}
+        </div>
+      ))}
+    </div>
+  )}
+</div>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.date}</label>
               <input style={inputStyle} placeholder="22 Sep 2024" value={date} onChange={e => setDate(e.target.value)} /></div>
