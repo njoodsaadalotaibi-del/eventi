@@ -1,8 +1,11 @@
  //import { useState, useEffect } from "react";
-import { useState } from "react";
-import { useEffect } from "react";
+//import { useState } from "react";
+//import { useEffect } from "react";
 import { supabase } from "./supabase";
 import { GoogleMap, useLoadScript, MarkerF } from "@react-google-maps/api";
+
+import React, { useState, useEffect } from "react";
+
 
 const Orange = "#FF5722";
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
@@ -464,6 +467,25 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
   const [reservations, setReservations] = useState([]);
   const [loadingRes, setLoadingRes] = useState(false);
 
+  const [orgRequests, setOrgRequests] = useState([]);
+const [loadingOrg, setLoadingOrg] = useState(false);
+
+
+
+useEffect(() => {
+  if (activeTab !== "organizers") return;
+  const fetchOrgRequests = async () => {
+    setLoadingOrg(true);
+    const { data } = await supabase
+      .from("organizer_requests").select("*")
+      .order("created_at", { ascending: false });
+    setOrgRequests(data || []);
+    setLoadingOrg(false);
+  };
+  fetchOrgRequests();
+}, [activeTab]);
+
+
   useEffect(() => {
     const fetchReservations = async () => {
       setLoadingRes(true);
@@ -477,6 +499,16 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
   const updateStatus = async (id, status) => {
     await supabase.from("reservations").update({ status }).eq("id", id);
     setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  };
+
+  //send organizer request
+
+  const updateOrganizerRequest = async (req, status) => {
+    await supabase.from("organizer_requests").update({ status }).eq("id", req.id);
+    if (status === "approved") {
+      await supabase.from("users").update({ role: "organizer" }).eq("id", req.user_id);
+    }
+    setOrgRequests(prev => prev.map(r => r.id === req.id ? { ...r, status } : r));
   };
 
   const inputStyle = {
@@ -531,8 +563,9 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
 
       {/* Admin tabs */}
       <div style={{ background: "#fff", display: "flex", borderBottom: "1px solid #eee" }}>
-        {[["create", isAr ? "إنشاء فعالية" : "Create Event", "📋"],
-          ["reservations", t.reservations, "🎪"]].map(([tab, label, emoji]) => (
+       {[["create", isAr ? "إنشاء فعالية" : "Create Event", "📋"],
+  ["reservations", t.reservations, "🎪"],
+  ["organizers", t.organizerRequests, "👥"]].map(([tab, label, emoji]) => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             flex: 1, padding: "12px 0", border: "none", background: "transparent",
             color: activeTab === tab ? Orange : "#999",
@@ -683,6 +716,46 @@ function AdminScreen({ onBack, lang, onEventPublished }) {
           ))}
         </div>
       )}
+
+
+
+
+
+
+      {/* organizer tab*/}
+      {activeTab === "organizers" && (
+  <div style={{ padding: 20 }}>
+    {loadingOrg && <div style={{ textAlign: "center", color: Orange, padding: 40 }}>⏳</div>}
+    {!loadingOrg && orgRequests.length === 0 && (
+      <div style={{ textAlign: "center", color: "#999", padding: 40 }}>{t.noOrganizerRequests}</div>
+    )}
+    {!loadingOrg && orgRequests.map(req => (
+      <div key={req.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{req.name}</div>
+            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{req.email}</div>
+            <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>{req.reason}</div>
+          </div>
+          <span style={{
+            padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+            background: req.status === "approved" ? "#E1F5EE" : req.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
+            color: req.status === "approved" ? "#085041" : req.status === "rejected" ? "#c62828" : "#633806"
+          }}>
+            {req.status === "approved" ? t.approved : req.status === "rejected" ? t.rejected : t.pending}
+          </span>
+        </div>
+        {req.status === "pending" && (
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button onClick={() => updateOrganizerRequest(req, "approved")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✓ {t.approve}</button>
+            <button onClick={() => updateOrganizerRequest(req, "rejected")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕ {t.reject}</button>
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+)}
+
     </div>
   );
   } 
@@ -887,10 +960,16 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
 }
 
 function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
+
+
+
  const [imageUrl, setImageUrl] = useState("");
   const t = translations[lang];
   const isAr = lang === "ar";
   const [eventName, setEventName] = useState("");
+
+  const [showBoothMap, setShowBoothMap] = useState(false);
+const [publishedEvent, setPublishedEvent] = useState(null);
 
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
@@ -905,6 +984,8 @@ function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
   const [myReservations, setMyReservations] = useState([]);
   const [loadingRes, setLoadingRes] = useState(false);
   const [activeTab, setActiveTab] = useState("create");
+
+  
 
   useEffect(() => {
     if (activeTab !== "reservations") return;
@@ -939,16 +1020,36 @@ function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
       const { data, error: sbError } = await supabase.from("events").insert([newEvent]).select();
       if (sbError) throw sbError;
       onEventPublished(data[0]);
+      setPublishedEvent(data[0]);
       setPublished(true);
     } catch (err) { console.error(err); setError("Failed to publish."); }
     finally { setIsPublishing(false); }
   };
+
+
+
+if (showBoothMap && publishedEvent) return (
+  <BoothMapEditor event={publishedEvent} onBack={() => setShowBoothMap(false)} lang={lang} />
+);
+
+
 
   if (published) return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
       <span style={{ fontSize: 72 }}>🎉</span>
       <div style={{ fontSize: 24, fontWeight: 700, color: "#111" }}>{t.published}</div>
       <button onClick={onBack} style={{ marginTop: 16, padding: "12px 32px", borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{t.backHome}</button>
+    
+    
+    {published && (
+  <button
+    onClick={() => setShowBoothMap(true)}
+    style={{ width: "100%", padding: 14, borderRadius: 16, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 8 }}
+  >
+    🗺️ Set Up Booth Map
+  </button>
+)}
+
     </div>
   );
 
@@ -1055,6 +1156,221 @@ function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
     </div>
   );
 }
+
+
+//event booths maps 
+
+function BoothMapEditor({ event, onBack, lang }) {
+
+  //const t = translations[lang];
+  const isAr = lang === "ar";
+  const [floorMap, setFloorMap] = useState(event.floor_map_url || null);
+  const [booths, setBooths] = useState([]);
+  const [selectedBooth, setSelectedBooth] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  //const [isSaving, setIsSaving] = useState(false);
+  //const [saved, setSaved] = useState(false);
+  const [showBoothForm, setShowBoothForm] = useState(false);
+  const [clickPosition, setClickPosition] = useState(null);
+  const [boothForm, setBoothForm] = useState({ booth_number: "", price: "", size: "" });
+  const mapRef = React.useRef(null);
+
+  useEffect(() => {
+    const fetchBooths = async () => {
+      const { data } = await supabase
+        .from("booths")
+        .select("*")
+        .eq("event_id", event.id);
+      setBooths(data || []);
+    };
+    fetchBooths();
+  }, [event.id]);
+
+  const handleMapUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsUploading(true);
+    const fileName = `${event.id}-${Math.random()}.${file.name.split(".").pop()}`;
+    const { error: uploadError } = await supabase.storage
+      .from("floor-maps")
+      .upload(fileName, file);
+    if (uploadError) { console.error(uploadError); setIsUploading(false); return; }
+    const { data: urlData } = supabase.storage.from("floor-maps").getPublicUrl(fileName);
+    const url = urlData.publicUrl;
+    await supabase.from("events").update({ floor_map_url: url }).eq("id", event.id);
+    setFloorMap(url);
+    setIsUploading(false);
+  };
+
+  const handleMapClick = (e) => {
+    if (!floorMap) return;
+    const rect = mapRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setClickPosition({ x, y });
+    setBoothForm({ booth_number: `B${booths.length + 1}`, price: "", size: "" });
+    setShowBoothForm(true);
+  };
+
+  const handleAddBooth = async () => {
+    if (!boothForm.booth_number || !boothForm.price) return;
+    const newBooth = {
+      event_id: event.id,
+      booth_number: boothForm.booth_number,
+      x: clickPosition.x,
+      y: clickPosition.y,
+      price: boothForm.price,
+      size: boothForm.size,
+      status: "available"
+    };
+    const { data } = await supabase.from("booths").insert([newBooth]).select();
+    setBooths(prev => [...prev, data[0]]);
+    setShowBoothForm(false);
+    setClickPosition(null);
+  };
+
+  const handleDeleteBooth = async (boothId) => {
+    await supabase.from("booths").delete().eq("id", boothId);
+    setBooths(prev => prev.filter(b => b.id !== boothId));
+    setSelectedBooth(null);
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "8px 12px", borderRadius: 10,
+    border: "1px solid #eee", background: "#f8f8f8",
+    fontSize: 13, outline: "none", boxSizing: "border-box",
+  };
+
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "Arial, sans-serif" : "sans-serif" }}>
+      {/* Header */}
+      <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #eee" }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>←</button>
+        <span style={{ fontWeight: 700, fontSize: 16 }}>🗺️ Booth Map — {event.name}</span>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        {/* Upload floor map */}
+        {!floorMap ? (
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 16 }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🏢</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#111", marginBottom: 8 }}>Upload Floor Map</div>
+            <div style={{ fontSize: 13, color: "#999", marginBottom: 16 }}>Upload an image of your venue layout</div>
+            <label style={{ display: "inline-block", padding: "10px 24px", borderRadius: 14, background: Orange, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              {isUploading ? "Uploading..." : "📁 Choose Image"}
+              <input type="file" accept="image/*" onChange={handleMapUpload} style={{ display: "none" }} />
+            </label>
+          </div>
+        ) : (
+          <>
+            {/* Instructions */}
+            <div style={{ background: `${Orange}15`, borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: Orange, fontWeight: 600 }}>
+              💡 Tap anywhere on the map to place a booth
+            </div>
+
+            {/* Map with booths */}
+            <div
+              ref={mapRef}
+              onClick={handleMapClick}
+              style={{ position: "relative", width: "100%", borderRadius: 16, overflow: "hidden", cursor: "crosshair", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", marginBottom: 12 }}
+            >
+              <img src={floorMap} alt="floor map" style={{ width: "100%", display: "block" }} />
+              {booths.map(booth => (
+                <div
+                  key={booth.id}
+                  onClick={(e) => { e.stopPropagation(); setSelectedBooth(selectedBooth?.id === booth.id ? null : booth); }}
+                  style={{
+                    position: "absolute",
+                    left: `${booth.x}%`,
+                    top: `${booth.y}%`,
+                    transform: "translate(-50%, -50%)",
+                    width: 36, height: 36,
+                    borderRadius: 8,
+                    background: selectedBooth?.id === booth.id ? "#06D6A0" : booth.status === "available" ? Orange : "#aaa",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, fontWeight: 700, color: "#fff",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                    border: selectedBooth?.id === booth.id ? "2px solid #fff" : "none",
+                    zIndex: 2
+                  }}
+                >
+                  {booth.booth_number}
+                </div>
+              ))}
+            </div>
+
+            {/* Selected booth info */}
+            {selectedBooth && (
+              <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 8 }}>Booth {selectedBooth.booth_number}</div>
+                <div style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>💰 Price: {selectedBooth.price}</div>
+                <div style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>📐 Size: {selectedBooth.size || "Not specified"}</div>
+                <button
+                  onClick={() => handleDeleteBooth(selectedBooth.id)}
+                  style={{ width: "100%", padding: 10, borderRadius: 12, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  🗑️ Delete Booth
+                </button>
+              </div>
+            )}
+
+            {/* Stats */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: Orange }}>{booths.length}</div>
+                <div style={{ fontSize: 10, color: "#999" }}>Total Booths</div>
+              </div>
+              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#06D6A0" }}>{booths.filter(b => b.status === "available").length}</div>
+                <div style={{ fontSize: 10, color: "#999" }}>Available</div>
+              </div>
+              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#aaa" }}>{booths.filter(b => b.status === "reserved").length}</div>
+                <div style={{ fontSize: 10, color: "#999" }}>Reserved</div>
+              </div>
+            </div>
+
+            {/* Change map button */}
+            <label style={{ display: "block", padding: "10px", borderRadius: 14, border: `1px solid ${Orange}`, color: Orange, fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "center" }}>
+              🔄 Change Floor Map
+              <input type="file" accept="image/*" onChange={handleMapUpload} style={{ display: "none" }} />
+            </label>
+          </>
+        )}
+      </div>
+
+      {/* Add booth form modal */}
+      {showBoothForm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 24, width: "100%", maxWidth: 480 }}>
+            <div style={{ width: 40, height: 4, background: "#eee", borderRadius: 2, margin: "0 auto 20px" }} />
+            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>🎪 Add Booth</div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Booth Number</label>
+              <input style={inputStyle} value={boothForm.booth_number} onChange={e => setBoothForm(p => ({ ...p, booth_number: e.target.value }))} placeholder="e.g. A1, B2" />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Price</label>
+              <input style={inputStyle} value={boothForm.price} onChange={e => setBoothForm(p => ({ ...p, price: e.target.value }))} placeholder="e.g. $100, 50 KWD" />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Size</label>
+              <input style={inputStyle} value={boothForm.size} onChange={e => setBoothForm(p => ({ ...p, size: e.target.value }))} placeholder="e.g. 3x3m, 4x4m" />
+            </div>
+            <button onClick={handleAddBooth} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+              ✓ Add Booth
+            </button>
+            <button onClick={() => setShowBoothForm(false)} style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function App() {
   const [selectedCategory, setSelectedCategory] = useState("All");
