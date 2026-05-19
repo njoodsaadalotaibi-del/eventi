@@ -652,22 +652,25 @@ useEffect(() => {
     placeholder={isAr ? "مثال: الكويت" : "Search for a location..."}
     value={location}
     onChange={async (e) => {
-      setLocation(e.target.value);
-      if (e.target.value.length < 3) { setLocationSuggestions([]); return; }
-      try {
-        const res = await fetch(
-  `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw`,
-  { headers: { "Accept-Language": "en" } }
-);
-const data = await res.json();
-setLocationSuggestions(data.map(place => ({
-  formatted_address: place.display_name,
-  geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
-})));
-      } catch (err) {
-        console.error(err);
-      }
-    }}
+  setLocation(e.target.value);
+  if (e.target.value.length < 2) { setLocationSuggestions([]); return; }
+  clearTimeout(window.locationTimeout);
+  window.locationTimeout = setTimeout(async () => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw&accept-language=en`,
+        { headers: { "Accept-Language": "en", "User-Agent": "ateventi/1.0" } }
+      );
+      const data = await res.json();
+      setLocationSuggestions(data.map(place => ({
+        formatted_address: place.display_name,
+        geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
+      })));
+    } catch (err) {
+      console.error(err);
+    }
+  }, 400);
+}}
   />
   {locationSuggestions.length > 0 && (
     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
@@ -1141,24 +1144,25 @@ if (showBoothMap && publishedEvent) return (
     placeholder={isAr ? "مثال: الكويت" : "Search for a location..."}
     value={location}
     onChange={async (e) => {
-      setLocation(e.target.value);
-      console.log("typing:", e.target.value);
-        console.log("key:", import.meta.env.VITE_GEOCODING_KEY);
-      if (e.target.value.length < 3) { setLocationSuggestions([]); return; }
-      try {
-       const res = await fetch(
-  `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw`,
-  { headers: { "Accept-Language": "en" } }
-);
-const data = await res.json();
-setLocationSuggestions(data.map(place => ({
-  formatted_address: place.display_name,
-  geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
-})));
-      } catch (err) {
-        console.error(err);
-      }
-    }}
+  setLocation(e.target.value);
+  if (e.target.value.length < 2) { setLocationSuggestions([]); return; }
+  clearTimeout(window.locationTimeout);
+  window.locationTimeout = setTimeout(async () => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw&accept-language=en`,
+        { headers: { "Accept-Language": "en", "User-Agent": "ateventi/1.0" } }
+      );
+      const data = await res.json();
+      setLocationSuggestions(data.map(place => ({
+        formatted_address: place.display_name,
+        geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
+      })));
+    } catch (err) {
+      console.error(err);
+    }
+  }, 400);
+}}
   />
   {locationSuggestions.length > 0 && (
     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
