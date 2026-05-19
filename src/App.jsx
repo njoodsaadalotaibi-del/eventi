@@ -1138,10 +1138,12 @@ if (showBoothMap && publishedEvent) return (
     value={location}
     onChange={async (e) => {
       setLocation(e.target.value);
+      console.log("typing:", e.target.value);
+        console.log("key:", import.meta.env.VITE_GEOCODING_KEY);
       if (e.target.value.length < 3) { setLocationSuggestions([]); return; }
       try {
         const res = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(e.target.value)}&key=${GOOGLE_MAPS_KEY}`
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(e.target.value)}&key=${import.meta.env.VITE_GEOCODING_KEY}`
         );
         const data = await res.json();
         setLocationSuggestions(data.results?.slice(0, 4) || []);
