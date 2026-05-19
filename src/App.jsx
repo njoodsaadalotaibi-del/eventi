@@ -656,10 +656,14 @@ useEffect(() => {
       if (e.target.value.length < 3) { setLocationSuggestions([]); return; }
       try {
         const res = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(e.target.value)}&key=${GOOGLE_MAPS_KEY}`
-        );
-        const data = await res.json();
-        setLocationSuggestions(data.results?.slice(0, 4) || []);
+  `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw`,
+  { headers: { "Accept-Language": "en" } }
+);
+const data = await res.json();
+setLocationSuggestions(data.map(place => ({
+  formatted_address: place.display_name,
+  geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
+})));
       } catch (err) {
         console.error(err);
       }
@@ -1142,11 +1146,15 @@ if (showBoothMap && publishedEvent) return (
         console.log("key:", import.meta.env.VITE_GEOCODING_KEY);
       if (e.target.value.length < 3) { setLocationSuggestions([]); return; }
       try {
-        const res = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(e.target.value)}&key=${import.meta.env.VITE_GEOCODING_KEY}`
-        );
-        const data = await res.json();
-        setLocationSuggestions(data.results?.slice(0, 4) || []);
+       const res = await fetch(
+  `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw`,
+  { headers: { "Accept-Language": "en" } }
+);
+const data = await res.json();
+setLocationSuggestions(data.map(place => ({
+  formatted_address: place.display_name,
+  geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
+})));
       } catch (err) {
         console.error(err);
       }
