@@ -1,6 +1,8 @@
  //import { useState, useEffect } from "react";
 //import { useState } from "react";
 //import { useEffect } from "react";
+
+
 import { supabase } from "./supabase";
 import { GoogleMap, useLoadScript, MarkerF } from "@react-google-maps/api";
 
@@ -387,7 +389,11 @@ function MapScreen({ events, onEventSelected, t }) {
   );
 }
 
-function EventDetail({ event, onBack, lang }) {
+
+
+function EventDetail({ event, onBack, lang, userEmail }) {
+
+  const [showBoothMapViewer, setShowBoothMapViewer] = useState(false);
   const t = translations[lang];
   const isAr = lang === "ar";
   const [showReservation, setShowReservation] = useState(false);
@@ -433,21 +439,44 @@ function EventDetail({ event, onBack, lang }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.booths} {t.booths}</div>
           </div>
         </div>
-        <button
-          onClick={() => setShowReservation(true)}
-          style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
-          {t.reserveBooth}
-        </button>
+       {event.floor_map_url && (
+  <button
+    onClick={() => setShowBoothMapViewer(true)}
+    style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
+  >
+    🗺️ View & Reserve Booth
+  </button>
+)}
+{!event.floor_map_url && (
+  <button onClick={() => setShowReservation(true)} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+    {t.reserveBooth}
+  </button>
+)}
         <button style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: `${Orange}18`, color: Orange, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
           {t.attending}
         </button>
       </div>
       {showReservation && <ReservationModal event={event} onClose={() => setShowReservation(false)} lang={lang} />}
+      
+      {showBoothMapViewer &&( <BoothMapViewer
+  event={event}
+  onClose={() => setShowBoothMapViewer(false)}
+  userEmail={userEmail}
+/>
+      )}
     </div>
+    
   );
+
+
 }
 
 function AdminScreen({ onBack, lang, onEventPublished }) {
+
+
+  const [floorMapUrl, setFloorMapUrl] = useState("");
+  const [myEvents, setMyEvents] = useState([]);
+const [loadingEvents, setLoadingEvents] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const t = translations[lang];
   const isAr = lang === "ar";
@@ -475,6 +504,20 @@ const [lat, setLat] = useState(29.3759);
 const [lng, setLng] = useState(47.9774);
 
 
+
+useEffect(() => {
+  if (activeTab !== "events") return;
+  const fetchMyEvents = async () => {
+    setLoadingEvents(true);
+    const { data } = await supabase
+      .from("events")
+      .select("*")
+      .order("id", { ascending: false });
+    setMyEvents(data || []);
+    setLoadingEvents(false);
+  };
+  fetchMyEvents();
+}, [activeTab]);
 
 useEffect(() => {
   if (activeTab !== "organizers") return;
@@ -515,6 +558,36 @@ useEffect(() => {
     setOrgRequests(prev => prev.map(r => r.id === req.id ? { ...r, status } : r));
   };
 
+
+  const handleDeleteEvent = async (eventId) => {
+  if (!window.confirm("Are you sure you want to delete this event?")) return;
+  try {
+    // Delete reservations first
+    await supabase.from("reservations").delete().eq("event_id", eventId);
+    
+    // Delete booths
+    await supabase.from("booths").delete().eq("event_id", eventId);
+    
+    // Delete event
+    const { error } = await supabase.from("events").delete().eq("id", eventId);
+    
+    if (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete event: " + error.message);
+      return;
+    }
+    
+    // Remove from local state
+    setMyEvents(prev => prev.filter(e => e.id !== eventId));
+    alert("Event deleted successfully!");
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong!");
+  }
+};
+
+  
+
   const inputStyle = {
     width: "100%", padding: "10px 14px", borderRadius: 12,
     border: "1px solid #eee", background: "#f8f8f8",
@@ -528,7 +601,7 @@ useEffect(() => {
     setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: imageUrl, distance: "Nearby",  
+        name: eventName, category: selectedCat, image_url: imageUrl, floor_map_url: floorMapUrl, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -569,7 +642,7 @@ useEffect(() => {
       <div style={{ background: "#fff", display: "flex", borderBottom: "1px solid #eee" }}>
        {[["create", isAr ? "إنشاء فعالية" : "Create Event", "📋"],
   ["reservations", t.reservations, "🎪"],
-  ["organizers", t.organizerRequests, "👥"]].map(([tab, label, emoji]) => (
+  ["organizers", t.organizerRequests, "👥"],["events", "My Events", "📅"]].map(([tab, label, emoji]) => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             flex: 1, padding: "12px 0", border: "none", background: "transparent",
             color: activeTab === tab ? Orange : "#999",
@@ -603,7 +676,32 @@ useEffect(() => {
 
 <div>
   <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Event Image (optional)</label>
+ <div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Floor Map (optional)</label>
   <input
+    type="file"
+    accept="image/*"
+    onChange={async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("floor_maps")
+        .upload(fileName, file);
+      if (uploadError) { console.error(uploadError); return; }
+      const { data: urlData } = supabase.storage
+        .from("floor_maps")
+        .getPublicUrl(fileName);
+      setFloorMapUrl(urlData.publicUrl);
+    }}
+    style={{ width: "100%", padding: "10px 0", fontSize: 13, color: "#999", cursor: "pointer" }}
+  />
+  {floorMapUrl && (
+    <img src={floorMapUrl} alt="floor map preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
+  )}
+</div>
+ <input
     type="file"
     accept="image/*"
     onChange={async (e) => {
@@ -805,6 +903,37 @@ useEffect(() => {
   </div>
 )}
 
+
+
+{activeTab === "events" && (
+  <div style={{ padding: 20 }}>
+    {loadingEvents && <div style={{ textAlign: "center", color: Orange, padding: 40 }}>⏳</div>}
+    {!loadingEvents && myEvents.length === 0 && (
+      <div style={{ textAlign: "center", color: "#999", padding: 40 }}>No events yet</div>
+    )}
+    {!loadingEvents && myEvents.map(event => (
+      <div key={event.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
+            {event.image_url && (
+              <img src={event.image_url} alt={event.name} style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 10, marginBottom: 8 }} />
+            )}
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
+            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
+            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
+            <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
+          </div>
+        </div>
+        <button
+          onClick={() => handleDeleteEvent(event.id)}
+          style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+        >
+          🗑️ Delete Event
+        </button>
+      </div>
+    ))}
+  </div>
+)}
     </div>
   );
   } 
@@ -1011,6 +1140,10 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
 function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
 
 
+  const [floorMapUrl, setFloorMapUrl] = useState("");
+  const [myEvents, setMyEvents] = useState([]);
+const [loadingEvents, setLoadingEvents] = useState(false);
+
   const [locationSuggestions, setLocationSuggestions] = useState([]);
 const [lat, setLat] = useState(29.3759);
 const [lng, setLng] = useState(47.9774);
@@ -1039,6 +1172,21 @@ const [publishedEvent, setPublishedEvent] = useState(null);
 
   
 
+
+  useEffect(() => {
+  if (activeTab !== "events") return;
+  const fetchMyEvents = async () => {
+    setLoadingEvents(true);
+    const { data } = await supabase
+      .from("events")
+      .select("*")
+      .order("id", { ascending: false });
+    setMyEvents(data || []);
+    setLoadingEvents(false);
+  };
+  fetchMyEvents();
+}, [activeTab]);
+
   useEffect(() => {
     if (activeTab !== "reservations") return;
     const fetchReservations = async () => {
@@ -1062,7 +1210,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
     setIsPublishing(true); setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: imageUrl, distance: "Nearby",  
+        name: eventName, category: selectedCat, image_url: imageUrl,  floor_map_url: floorMapUrl, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -1073,10 +1221,44 @@ const [publishedEvent, setPublishedEvent] = useState(null);
       if (sbError) throw sbError;
       onEventPublished(data[0]);
       setPublishedEvent(data[0]);
-      setPublished(true);
+setPublished(true);
+console.log("published!", data[0]);
     } catch (err) { console.error(err); setError("Failed to publish."); }
     finally { setIsPublishing(false); }
   };
+
+
+  const handleDeleteEvent = async (eventId) => {
+  if (!window.confirm("Are you sure you want to delete this event?")) return;
+  try {
+    // Delete reservations first
+    await supabase.from("reservations").delete().eq("event_id", eventId);
+    
+    // Delete booths
+    await supabase.from("booths").delete().eq("event_id", eventId);
+    
+    // Delete event
+    const { error } = await supabase.from("events").delete().eq("id", eventId);
+    
+    if (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete event: " + error.message);
+      return;
+    }
+    
+    // Remove from local state
+    setMyEvents(prev => prev.filter(e => e.id !== eventId));
+    alert("Event deleted successfully!");
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong!");
+
+    
+  }
+
+
+};
+
 
 
 
@@ -1086,22 +1268,17 @@ if (showBoothMap && publishedEvent) return (
 
 
 
-  if (published) return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+if (published) return (
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, padding: 20 }}>
       <span style={{ fontSize: 72 }}>🎉</span>
       <div style={{ fontSize: 24, fontWeight: 700, color: "#111" }}>{t.published}</div>
-      <button onClick={onBack} style={{ marginTop: 16, padding: "12px 32px", borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{t.backHome}</button>
-    
-    
-    {published && (
-  <button
-    onClick={() => setShowBoothMap(true)}
-    style={{ width: "100%", padding: 14, borderRadius: 16, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 8 }}
-  >
-    🗺️ Set Up Booth Map
-  </button>
-)}
-
+      <button onClick={onBack} style={{ marginTop: 16, width: "100%", padding: "12px 32px", borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{t.backHome}</button>
+      <button
+        onClick={() => setShowBoothMap(true)}
+        style={{ width: "100%", padding: 14, borderRadius: 16, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 15, fontWeight: 700, cursor: "pointer" }}
+      >
+        🗺️ Set Up Booth Map
+      </button>
     </div>
   );
 
@@ -1112,7 +1289,7 @@ if (showBoothMap && publishedEvent) return (
         <span style={{ fontWeight: 700, fontSize: 18 }}>🎪 Organizer Dashboard</span>
       </div>
       <div style={{ background: "#fff", display: "flex", borderBottom: "1px solid #eee" }}>
-        {[["create", "📋 Create Event"], ["reservations", "🎪 Reservations"]].map(([tab, label]) => (
+        {[["create", "📋 Create Event"], ["reservations", "🎪 Reservations"],  ["events", "📅 My Events"]].map(([tab, label]) => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             flex: 1, padding: "12px 8px", border: "none", background: "transparent",
             color: activeTab === tab ? Orange : "#999", fontWeight: activeTab === tab ? 700 : 400,
@@ -1199,7 +1376,8 @@ if (showBoothMap && publishedEvent) return (
           </div>
 
 
-  <div>
+{/* Event Image */}
+<div>
   <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Event Image (optional)</label>
   <input
     type="file"
@@ -1210,12 +1388,9 @@ if (showBoothMap && publishedEvent) return (
       const fileExt = file.name.split(".").pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
-  .from("event-image")
-  .upload(fileName, file);
-     if (uploadError) {
-  console.error(uploadError);
-  return;
-}
+        .from("event-image")
+        .upload(fileName, file);
+      if (uploadError) { console.error(uploadError); return; }
       const { data: urlData } = supabase.storage
         .from("event-image")
         .getPublicUrl(fileName);
@@ -1225,6 +1400,33 @@ if (showBoothMap && publishedEvent) return (
   />
   {imageUrl && (
     <img src={imageUrl} alt="preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
+  )}
+</div>
+
+{/* Floor Map */}
+<div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Floor Map (optional)</label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("floor_maps")
+        .upload(fileName, file);
+      if (uploadError) { console.error(uploadError); return; }
+      const { data: urlData } = supabase.storage
+        .from("floor_maps")
+        .getPublicUrl(fileName);
+      setFloorMapUrl(urlData.publicUrl);
+    }}
+    style={{ width: "100%", padding: "10px 0", fontSize: 13, color: "#999", cursor: "pointer" }}
+  />
+  {floorMapUrl && (
+    <img src={floorMapUrl} alt="floor map preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
   )}
 </div>
           
@@ -1251,6 +1453,34 @@ if (showBoothMap && publishedEvent) return (
           ))}
         </div>
       )}
+
+      {activeTab === "events" && (
+  <div style={{ padding: 20 }}>
+    {loadingEvents && <div style={{ textAlign: "center", color: Orange, padding: 40 }}>⏳</div>}
+    {!loadingEvents && myEvents.length === 0 && (
+      <div style={{ textAlign: "center", color: "#999", padding: 40 }}>No events yet</div>
+    )}
+    {!loadingEvents && myEvents.map(event => (
+      <div key={event.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ flex: 1 }}>
+          {event.image_url && (
+            <img src={event.image_url} alt={event.name} style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 10, marginBottom: 8 }} />
+          )}
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
+          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
+          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
+          <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
+        </div>
+        <button
+          onClick={() => handleDeleteEvent(event.id)}
+          style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+        >
+          🗑️ Delete Event
+        </button>
+      </div>
+    ))}
+  </div>
+)}
     </div>
   );
 }
@@ -1290,10 +1520,10 @@ function BoothMapEditor({ event, onBack, lang }) {
     setIsUploading(true);
     const fileName = `${event.id}-${Math.random()}.${file.name.split(".").pop()}`;
     const { error: uploadError } = await supabase.storage
-      .from("floor-maps")
+      .from("floor_maps")
       .upload(fileName, file);
     if (uploadError) { console.error(uploadError); setIsUploading(false); return; }
-    const { data: urlData } = supabase.storage.from("floor-maps").getPublicUrl(fileName);
+    const { data: urlData } = supabase.storage.from("floor_maps").getPublicUrl(fileName);
     const url = urlData.publicUrl;
     await supabase.from("events").update({ floor_map_url: url }).eq("id", event.id);
     setFloorMap(url);
@@ -1470,6 +1700,190 @@ function BoothMapEditor({ event, onBack, lang }) {
 }
 
 
+function BoothMapViewer({ event, onClose, userEmail }) {
+  //const isAr = lang === "ar";
+  const [booths, setBooths] = useState([]);
+  const [selectedBooth, setSelectedBooth] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [reserving, setReserving] = useState(false);
+  const [reserved, setReserved] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState(userEmail || "");
+  const mapRef = React.useRef(null);
+
+  useEffect(() => {
+    const fetchBooths = async () => {
+      const { data } = await supabase
+        .from("booths")
+        .select("*")
+        .eq("event_id", event.id);
+      setBooths(data || []);
+      setLoading(false);
+    };
+    fetchBooths();
+  }, [event.id]);
+
+  const handleReserveBooth = async () => {
+    if (!name || !email) return;
+    setReserving(true);
+    try {
+      // Save reservation
+      await supabase.from("reservations").insert([{
+        event_id: event.id,
+        event_name: event.name,
+        name,
+        email,
+        booth_type: `Booth ${selectedBooth.booth_number} (${selectedBooth.size || "Standard"})`,
+        status: "pending"
+      }]);
+
+      // Update booth status to reserved
+      await supabase.from("booths").update({ status: "reserved", reserved_by: email }).eq("id", selectedBooth.id);
+
+      // Update local state
+      setBooths(prev => prev.map(b => b.id === selectedBooth.id ? { ...b, status: "reserved" } : b));
+      setReserved(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReserving(false);
+    }
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "10px 14px", borderRadius: 12,
+    border: "1px solid #eee", background: "#f8f8f8",
+    fontSize: 13, outline: "none", boxSizing: "border-box",
+  };
+
+  if (reserved) return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
+      <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 32, width: "100%", maxWidth: 480, textAlign: "center" }}>
+        <div style={{ fontSize: 64 }}>🎉</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#111", marginTop: 12 }}>Booth Reserved!</div>
+        <div style={{ fontSize: 13, color: "#999", marginTop: 8, marginBottom: 24 }}>
+          Booth <strong>{selectedBooth.booth_number}</strong> has been reserved successfully!
+        </div>
+        <button onClick={onClose} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Done
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#f8f8f8", zIndex: 100, overflowY: "auto" }}>
+      {/* Header */}
+      <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #eee", position: "sticky", top: 0, zIndex: 10 }}>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>←</button>
+        <span style={{ fontWeight: 700, fontSize: 16 }}>🗺️ Booth Map — {event.name}</span>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 12, background: "#fff", borderRadius: 12, padding: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#666" }}>
+            <div style={{ width: 16, height: 16, borderRadius: 4, background: Orange }} />
+            Available
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#666" }}>
+            <div style={{ width: 16, height: 16, borderRadius: 4, background: "#aaa" }} />
+            Reserved
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#666" }}>
+            <div style={{ width: 16, height: 16, borderRadius: 4, background: "#06D6A0" }} />
+            Selected
+          </div>
+        </div>
+
+        {/* Map */}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 40, color: Orange }}>⏳ Loading map...</div>
+        ) : (
+          <div
+            ref={mapRef}
+            style={{ position: "relative", width: "100%", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", marginBottom: 12 }}
+          >
+            <img src={event.floor_map_url} alt="floor map" style={{ width: "100%", display: "block" }} />
+            {booths.map(booth => (
+              <div
+                key={booth.id}
+                onClick={() => {
+                  if (booth.status === "reserved") return;
+                  setSelectedBooth(selectedBooth?.id === booth.id ? null : booth);
+                }}
+                style={{
+                  position: "absolute",
+                  left: `${booth.x}%`,
+                  top: `${booth.y}%`,
+                  transform: "translate(-50%, -50%)",
+                  width: 36, height: 36,
+                  borderRadius: 8,
+                  background: booth.status === "reserved" ? "#aaa" : selectedBooth?.id === booth.id ? "#06D6A0" : Orange,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 700, color: "#fff",
+                  cursor: booth.status === "reserved" ? "not-allowed" : "pointer",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                  border: selectedBooth?.id === booth.id ? "2px solid #fff" : "none",
+                  zIndex: 2,
+                  transition: "all 0.2s"
+                }}
+              >
+                {booth.booth_number}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Booth info + reservation form */}
+        {selectedBooth && (
+          <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#111", marginBottom: 12 }}>
+              🎪 Booth {selectedBooth.booth_number}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 12, padding: 12, textAlign: "center" }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: Orange }}>{selectedBooth.price}</div>
+                <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>Price</div>
+              </div>
+              <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 12, padding: 12, textAlign: "center" }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>{selectedBooth.size || "Standard"}</div>
+                <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>Size</div>
+              </div>
+            </div>
+
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Your Name</label>
+            <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="John Smith" value={name} onChange={e => setName(e.target.value)} />
+
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Your Email</label>
+            <input style={{ ...inputStyle, marginBottom: 16 }} placeholder="john@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
+
+            <button
+              onClick={handleReserveBooth}
+              disabled={reserving || !name || !email}
+              style={{
+                width: "100%", padding: 14, borderRadius: 16, border: "none",
+                background: reserving || !name || !email ? "#ccc" : Orange,
+                color: "#fff", fontSize: 15, fontWeight: 700,
+                cursor: reserving || !name || !email ? "not-allowed" : "pointer"
+              }}
+            >
+              {reserving ? "Reserving..." : `🎪 Reserve Booth ${selectedBooth.booth_number}`}
+            </button>
+          </div>
+        )}
+
+        {!loading && booths.length === 0 && (
+          <div style={{ textAlign: "center", color: "#999", padding: 40 }}>
+            No booths set up for this event yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -1541,7 +1955,7 @@ export default function App() {
   if (!user) return <AuthScreen onAuth={() => {}} lang={lang} />;
   if (selectedEvent) return <EventDetail event={selectedEvent} onBack={() => setSelectedEvent(null)} lang={lang} userEmail={user?.email} />;
   if (showAdmin) return <AdminScreen onBack={() => setShowAdmin(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); setShowAdmin(false); }} user={user} />;
-  if (showOrganizer) return <OrganizerScreen onBack={() => setShowOrganizer(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); setShowOrganizer(false); }} user={user} userProfile={userProfile} />;
+  if (showOrganizer) return <OrganizerScreen onBack={() => setShowOrganizer(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} user={user} userProfile={userProfile} />;
   if (showProfile) return <ProfileScreen user={user} userProfile={userProfile} onBack={() => setShowProfile(false)} onLogout={handleLogout} lang={lang} />;
 
   return (
