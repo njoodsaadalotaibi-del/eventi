@@ -391,12 +391,29 @@ function MapScreen({ events, onEventSelected, t }) {
 
 
 
-function EventDetail({ event, onBack, lang, userEmail }) {
+function EventDetail({ event, onBack, lang, userEmail, userId }) {
 
   const [showBoothMapViewer, setShowBoothMapViewer] = useState(false);
   const t = translations[lang];
   const isAr = lang === "ar";
   const [showReservation, setShowReservation] = useState(false);
+
+  const [isAttending, setIsAttending] = useState(false);
+const [attendees, setAttendees] = useState([]);
+
+useEffect(() => {
+  const fetchAttendees = async () => {
+    const { data } = await supabase
+      .from("attendees")
+      .select("*")
+      .eq("event_id", event.id);
+    setAttendees(data || []);
+    if (userEmail) {
+      setIsAttending(data?.some(a => a.email === userEmail) || false);
+    }
+  };
+  fetchAttendees();
+}, [event.id, userEmail]);
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "Arial, sans-serif" : "sans-serif" }}>
@@ -426,19 +443,40 @@ function EventDetail({ event, onBack, lang, userEmail }) {
         </div>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111", margin: "0 0 8px" }}>{t.about}</h3>
         <p style={{ fontSize: 13, color: "#666", lineHeight: 1.7, margin: "0 0 16px" }}>{event.description}</p>
-        <div style={{ background: "#fff", borderRadius: 16, padding: 16, display: "flex", marginBottom: 16 }}>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 24 }}>🏢</div>
-            <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>{t.hostedBy}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.host}</div>
-          </div>
-          <div style={{ width: 1, background: "#eee" }} />
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 24 }}>🎪</div>
-            <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>{t.boothsAvailable}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.booths} {t.booths}</div>
-          </div>
+        
+       {/* Attendees */}
+{attendees.length > 0 && (
+  <div style={{ marginBottom: 16 }}>
+    <div style={{ fontSize: 13, color: "#999", marginBottom: 8 }}>
+      👥 {attendees.length} {attendees.length === 1 ? "person" : "people"} attending
+    </div>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      {attendees.slice(0, 10).map((attendee, i) => (
+        <div key={i} style={{
+          width: 36, height: 36, borderRadius: "50%",
+          background: `${Orange}22`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 14, fontWeight: 700, color: Orange,
+          border: `2px solid #fff`,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+          overflow: "hidden"
+        }}>
+          {attendee.avatar_url ? (
+            <img src={attendee.avatar_url} alt={attendee.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            attendee.name?.[0]?.toUpperCase() || "👤"
+          )}
         </div>
+      ))}
+      {attendees.length > 10 && (
+        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#999" }}>
+          +{attendees.length - 10}
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
        {event.floor_map_url && (
   <button
     onClick={() => setShowBoothMapViewer(true)}
@@ -452,9 +490,45 @@ function EventDetail({ event, onBack, lang, userEmail }) {
     {t.reserveBooth}
   </button>
 )}
-        <button style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: `${Orange}18`, color: Orange, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-          {t.attending}
-        </button>
+        <button
+  onClick={async () => {
+    if (!userEmail) return;
+    try {
+      if (isAttending) {
+        // Remove attendance
+        await supabase.from("attendees")
+          .delete()
+          .eq("event_id", event.id)
+          .eq("email", userEmail);
+        setIsAttending(false);
+        setAttendees(prev => prev.filter(a => a.email !== userEmail));
+      } else {
+        // Add attendance
+        const { data } = await supabase.from("attendees").insert([{
+          event_id: event.id,
+          user_id: userId,
+          email: userEmail,
+          name: userEmail.split("@")[0],
+          avatar_url: null
+        }]).select();
+        setIsAttending(true);
+        setAttendees(prev => [...prev, data[0]]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }}
+  style={{
+    width: "100%", padding: 14, borderRadius: 16, border: "none",
+    background: isAttending ? "#E1F5EE" : `${Orange}18`,
+    color: isAttending ? "#085041" : Orange,
+    fontSize: 15, fontWeight: 700, cursor: "pointer",
+    transition: "all 0.2s"
+  }}
+>
+  {isAttending ? "✅ Attending" : t.attending}
+</button>
+
       </div>
       {showReservation && <ReservationModal event={event} onClose={() => setShowReservation(false)} lang={lang} />}
       
@@ -1008,34 +1082,62 @@ useEffect(() => {
         }}>
           {loading ? "..." : isLogin ? t.login : t.signup}
         </button>
-        <button onClick={() => { setIsLogin(!isLogin); setError(""); }} style={{
-          background: "none", border: "none", color: Orange,
-          fontSize: 13, cursor: "pointer", textAlign: "center"
-        }}>
-          {isLogin ? t.noAccount : t.haveAccount}
-        </button>
+      <button onClick={() => { setIsLogin(!isLogin); setError(""); }} style={{
+  background: "none", border: "none", color: Orange,
+  fontSize: 13, cursor: "pointer", textAlign: "center"
+}}>
+  {isLogin ? t.noAccount : t.haveAccount}
+</button>
+
+<div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0" }}>
+  <div style={{ flex: 1, height: 1, background: "#eee" }} />
+  <span style={{ fontSize: 11, color: "#ccc" }}>or</span>
+  <div style={{ flex: 1, height: 1, background: "#eee" }} />
+</div>
+
+<button onClick={() => onAuth("visitor")} style={{
+  width: "100%", padding: 14, borderRadius: 16,
+  border: "1px solid #eee", background: "#fff",
+  color: "#666", fontSize: 15, fontWeight: 600, cursor: "pointer"
+}}>
+  {lang === "ar" ? "متابعة كزائر 👀" : "Continue as Visitor 👀"}
+</button>
       </div>
     </div>
   );
 }
 
-function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
+function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpdate, onEventClick }) {
   const t = translations[lang];
   const isAr = lang === "ar";
   const [myReservations, setMyReservations] = useState([]);
+  const [myEvents, setMyEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showOrganizerForm, setShowOrganizerForm] = useState(false);
   const [reason, setReason] = useState("");
   const [requestSent, setRequestSent] = useState(false);
   const [requestStatus, setRequestStatus] = useState(null);
+  const [activeTab, setActiveTab] = useState("reservations");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatar_url || null);
 
   useEffect(() => {
     const fetchData = async () => {
+      // Fetch reservations
       const { data: resData } = await supabase
         .from("reservations").select("*")
         .eq("email", user.email)
         .order("created_at", { ascending: false });
       setMyReservations(resData || []);
+
+      // Fetch attending events
+     const { data: attendData } = await supabase
+  .from("attendees").select("*, events(*)")
+  .eq("email", user.email)
+  .order("created_at", { ascending: false });
+      setMyEvents(attendData || []);
+
+      // Fetch organizer request status
       const { data: reqData } = await supabase
         .from("organizer_requests").select("*")
         .eq("user_id", user.id).single();
@@ -1044,6 +1146,29 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
     };
     fetchData();
   }, [user]);
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${user.id}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      const url = urlData.publicUrl;
+      await supabase.from("users").update({ avatar_url: url }).eq("id", user.id);
+      setAvatarUrl(url);
+      if (onProfileUpdate) onProfileUpdate({ ...userProfile, avatar_url: url });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleOrganizerRequest = async () => {
     if (!reason) return;
@@ -1061,35 +1186,56 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr" }}>
-     <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #eee" }}>
-  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-   <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#FF5722", fontWeight: 700 }}>←</button>
-    <span style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{t.profile}</span>
-  </div>
-  <button onClick={onLogout} style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid #eee", background: "transparent", color: "#999", fontSize: 12, cursor: "pointer" }}>
-    {t.logout}
-  </button>
-</div>
+      {/* Header */}
+      <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #eee" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#111" }}>←</button>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{t.profile}</span>
+        </div>
+        <button onClick={onLogout} style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid #eee", background: "transparent", color: "#999", fontSize: 12, cursor: "pointer" }}>
+          {t.logout}
+        </button>
+      </div>
+
       <div style={{ padding: 20 }}>
+        {/* User info with avatar */}
         <div style={{ background: "#fff", borderRadius: 20, padding: 20, marginBottom: 16, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", background: `${Orange}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 12px" }}>
-            {userProfile?.name?.[0]?.toUpperCase() || "👤"}
+          {/* Avatar */}
+          <div style={{ position: "relative", display: "inline-block", marginBottom: 12 }}>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", overflow: "hidden", background: `${Orange}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, border: `3px solid ${Orange}` }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span>{userProfile?.name?.[0]?.toUpperCase() || "👤"}</span>
+              )}
+            </div>
+            {/* Upload button */}
+            <label style={{
+              position: "absolute", bottom: 0, right: 0,
+              width: 26, height: 26, borderRadius: "50%",
+              background: Orange, display: "flex", alignItems: "center",
+              justifyContent: "center", cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.2)", fontSize: 14
+            }}>
+              {uploadingAvatar ? "⏳" : "📷"}
+              <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: "none" }} />
+            </label>
           </div>
+
           <div style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{userProfile?.name || user.email}</div>
           <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>{user.email}</div>
-          {userProfile?.role !== "consumer" && (
-            <div style={{ marginTop: 8 }}>
-              <span style={{
-                padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                background: userProfile?.role === "admin" ? "#FFEBEE" : "#F3E8FF",
-                color: userProfile?.role === "admin" ? "#c62828" : "#6B21A8"
-              }}>
-                {userProfile?.role === "admin" ? "👑 Admin" : "🎪 Organizer"}
-              </span>
-            </div>
-          )}
+          <div style={{ marginTop: 8 }}>
+            <span style={{
+              padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+              background: userProfile?.role === "admin" ? "#FFEBEE" : userProfile?.role === "organizer" ? "#F3E8FF" : "#E8FDF5",
+              color: userProfile?.role === "admin" ? "#c62828" : userProfile?.role === "organizer" ? "#6B21A8" : "#065F46"
+            }}>
+              {userProfile?.role === "admin" ? "👑 Admin" : userProfile?.role === "organizer" ? "🎪 Organizer" : "🎉 Consumer"}
+            </span>
+          </div>
         </div>
 
+        {/* Become organizer section */}
         {userProfile?.role === "consumer" && (
           <div style={{ background: "#fff", borderRadius: 20, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
             {requestStatus === "pending" && <div style={{ textAlign: "center", color: "#633806", fontSize: 13 }}>⏳ {t.organizerStatus}</div>}
@@ -1114,24 +1260,71 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang }) {
           </div>
         )}
 
-        <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 12 }}>{t.myReservations}</div>
-        {loading && <div style={{ textAlign: "center", color: Orange, padding: 20 }}>⏳</div>}
-        {!loading && myReservations.length === 0 && <div style={{ textAlign: "center", color: "#999", padding: 20 }}>{t.noMyReservations}</div>}
-        {!loading && myReservations.map(res => (
-          <div key={res.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{res.event_name}</div>
-            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>🎪 {res.booth_type} booth</div>
-            <div style={{ marginTop: 6 }}>
-              <span style={{
-                padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                background: res.status === "approved" ? "#E1F5EE" : res.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
-                color: res.status === "approved" ? "#085041" : res.status === "rejected" ? "#c62828" : "#633806"
-              }}>
-                {res.status === "approved" ? t.approved : res.status === "rejected" ? t.rejected : t.pending}
-              </span>
-            </div>
-          </div>
-        ))}
+        {/* Tabs */}
+        <div style={{ background: "#fff", borderRadius: 14, display: "flex", marginBottom: 16, overflow: "hidden" }}>
+          {[["reservations", "🎪 Reservations"], ["calendar", "📅 My Calendar"]].map(([tab, label]) => (
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{
+              flex: 1, padding: "10px 0", border: "none", background: "transparent",
+              color: activeTab === tab ? Orange : "#999",
+              fontWeight: activeTab === tab ? 700 : 400,
+              fontSize: 12, cursor: "pointer",
+              borderBottom: activeTab === tab ? `2px solid ${Orange}` : "2px solid transparent"
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {/* Reservations tab */}
+        {activeTab === "reservations" && (
+          <>
+            {loading && <div style={{ textAlign: "center", color: Orange, padding: 20 }}>⏳</div>}
+            {!loading && myReservations.length === 0 && <div style={{ textAlign: "center", color: "#999", padding: 20 }}>{t.noMyReservations}</div>}
+            {!loading && myReservations.map(res => (
+              <div key={res.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{res.event_name}</div>
+                <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>🎪 {res.booth_type}</div>
+                <div style={{ marginTop: 6 }}>
+                  <span style={{
+                    padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                    background: res.status === "approved" ? "#E1F5EE" : res.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
+                    color: res.status === "approved" ? "#085041" : res.status === "rejected" ? "#c62828" : "#633806"
+                  }}>
+                    {res.status === "approved" ? t.approved : res.status === "rejected" ? t.rejected : t.pending}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Calendar tab */}
+        {activeTab === "calendar" && (
+          <>
+            {loading && <div style={{ textAlign: "center", color: Orange, padding: 20 }}>⏳</div>}
+            {!loading && myEvents.length === 0 && (
+              <div style={{ textAlign: "center", color: "#999", padding: 40 }}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>📅</div>
+                <div>No events yet — tap "I'm Attending" on any event!</div>
+              </div>
+            )}
+            {!loading && myEvents.map(item => (
+              <div key={item.id} onClick={() => onEventClick(item.events)} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", gap: 12, alignItems: "center", cursor: "pointer" }}
+onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
+                {item.events?.image_url ? (
+                  <img src={item.events.image_url} alt={item.events?.name} style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 56, height: 56, borderRadius: 12, background: `${Orange}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🎉</div>
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{item.events?.name}</div>
+                  <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {item.events?.date}</div>
+                  <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>⏰ {item.events?.time}</div>
+                  <div style={{ fontSize: 11, color: Orange, marginTop: 2 }}>📍 {item.events?.location}</div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1488,27 +1681,26 @@ if (published) return (
 
 //event booths maps 
 
-function BoothMapEditor({ event, onBack, lang }) {
+function BoothMapEditor({ event, onBack }) {
 
-  //const t = translations[lang];
-  const isAr = lang === "ar";
+  
+  const [zoom, setZoom] = useState(1);
   const [floorMap, setFloorMap] = useState(event.floor_map_url || null);
   const [booths, setBooths] = useState([]);
-  const [selectedBooth, setSelectedBooth] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  //const [isSaving, setIsSaving] = useState(false);
-  //const [saved, setSaved] = useState(false);
-  const [showBoothForm, setShowBoothForm] = useState(false);
-  const [clickPosition, setClickPosition] = useState(null);
-  const [boothForm, setBoothForm] = useState({ booth_number: "", price: "", size: "" });
+  const [boothTypes, setBoothTypes] = useState([
+    { id: 1, name: "Standard", color: "#22C55E", price: "", size: "" },
+  ]);
+  const [selectedType, setSelectedType] = useState(null);
+  const [showTypeForm, setShowTypeForm] = useState(false);
+  const [newType, setNewType] = useState({ name: "", color: "#6366F1", price: "", size: "" });
   const mapRef = React.useRef(null);
+
+  const colors = ["#22C55E", "#A855F7", "#EF4444", "#3B82F6", "#F59E0B", "#EC4899", "#14B8A6", "#F97316"];
 
   useEffect(() => {
     const fetchBooths = async () => {
-      const { data } = await supabase
-        .from("booths")
-        .select("*")
-        .eq("event_id", event.id);
+      const { data } = await supabase.from("booths").select("*").eq("event_id", event.id);
       setBooths(data || []);
     };
     fetchBooths();
@@ -1519,9 +1711,7 @@ function BoothMapEditor({ event, onBack, lang }) {
     if (!file) return;
     setIsUploading(true);
     const fileName = `${event.id}-${Math.random()}.${file.name.split(".").pop()}`;
-    const { error: uploadError } = await supabase.storage
-      .from("floor_maps")
-      .upload(fileName, file);
+    const { error: uploadError } = await supabase.storage.from("floor_maps").upload(fileName, file);
     if (uploadError) { console.error(uploadError); setIsUploading(false); return; }
     const { data: urlData } = supabase.storage.from("floor_maps").getPublicUrl(fileName);
     const url = urlData.publicUrl;
@@ -1530,37 +1720,36 @@ function BoothMapEditor({ event, onBack, lang }) {
     setIsUploading(false);
   };
 
-  const handleMapClick = (e) => {
-    if (!floorMap) return;
+  const handleMapClick = async (e) => {
+    if (!selectedType || !mapRef.current) return;
     const rect = mapRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setClickPosition({ x, y });
-    setBoothForm({ booth_number: `B${booths.length + 1}`, price: "", size: "" });
-    setShowBoothForm(true);
-  };
-
-  const handleAddBooth = async () => {
-    if (!boothForm.booth_number || !boothForm.price) return;
     const newBooth = {
       event_id: event.id,
-      booth_number: boothForm.booth_number,
-      x: clickPosition.x,
-      y: clickPosition.y,
-      price: boothForm.price,
-      size: boothForm.size,
+      booth_number: `${selectedType.name[0]}${booths.length + 1}`,
+      x, y,
+      price: selectedType.price,
+      size: selectedType.size,
+      color: selectedType.color,
+      type_name: selectedType.name,
       status: "available"
     };
     const { data } = await supabase.from("booths").insert([newBooth]).select();
     setBooths(prev => [...prev, data[0]]);
-    setShowBoothForm(false);
-    setClickPosition(null);
   };
 
-  const handleDeleteBooth = async (boothId) => {
+  const handleDeleteBooth = async (boothId, e) => {
+    e.stopPropagation();
     await supabase.from("booths").delete().eq("id", boothId);
     setBooths(prev => prev.filter(b => b.id !== boothId));
-    setSelectedBooth(null);
+  };
+
+  const handleAddType = () => {
+    if (!newType.name || !newType.price) return;
+    setBoothTypes(prev => [...prev, { ...newType, id: Date.now() }]);
+    setNewType({ name: "", color: colors[boothTypes.length % colors.length], price: "", size: "" });
+    setShowTypeForm(false);
   };
 
   const inputStyle = {
@@ -1570,20 +1759,75 @@ function BoothMapEditor({ event, onBack, lang }) {
   };
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "Arial, sans-serif" : "sans-serif" }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", fontFamily: "sans-serif" }}>
       {/* Header */}
-      <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #eee" }}>
+      <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #eee", position: "sticky", top: 0, zIndex: 10 }}>
         <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>←</button>
         <span style={{ fontWeight: 700, fontSize: 16 }}>🗺️ Booth Map — {event.name}</span>
       </div>
 
       <div style={{ padding: 16 }}>
-        {/* Upload floor map */}
+
+        {/* Booth Types Panel */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>🎨 Booth Types</div>
+            <button
+              onClick={() => setShowTypeForm(true)}
+              style={{ padding: "4px 12px", borderRadius: 20, border: "none", background: Orange, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >
+              + Add Type
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {boothTypes.map(type => (
+              <div
+                key={type.id}
+                onClick={() => setSelectedType(selectedType?.id === type.id ? null : type)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 14px", borderRadius: 20,
+                  border: `2px solid ${selectedType?.id === type.id ? type.color : "#eee"}`,
+                  background: selectedType?.id === type.id ? `${type.color}18` : "#f8f8f8",
+                  cursor: "pointer", transition: "all 0.2s"
+                }}
+              >
+                <div style={{ width: 16, height: 16, borderRadius: "50%", background: type.color, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 12, color: "#111" }}>{type.name}</div>
+                  <div style={{ fontSize: 10, color: "#999" }}>{type.price} · {type.size}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, padding: "8px 12px", background: "#f0f0f0", borderRadius: 10 }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#aaa" }} />
+            <span style={{ fontSize: 11, color: "#666" }}>Grey = Reserved</span>
+          </div>
+        </div>
+
+        {/* Selected type indicator */}
+        {selectedType && (
+          <div style={{ background: `${selectedType.color}18`, border: `1px solid ${selectedType.color}`, borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: selectedType.color, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", background: selectedType.color }} />
+            Placing: {selectedType.name} — Click map to add · Deselect type then click dot to delete
+          </div>
+        )}
+
+        {!selectedType && floorMap && (
+          <div style={{ background: "#fff8e1", border: "1px solid #ffe082", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "#7c5800", fontWeight: 600 }}>
+            👆 Select a booth type above to start placing booths
+          </div>
+        )}
+
+        {/* Map */}
         {!floorMap ? (
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🏢</div>
             <div style={{ fontWeight: 700, fontSize: 16, color: "#111", marginBottom: 8 }}>Upload Floor Map</div>
-            <div style={{ fontSize: 13, color: "#999", marginBottom: 16 }}>Upload an image of your venue layout</div>
             <label style={{ display: "inline-block", padding: "10px 24px", borderRadius: 14, background: Orange, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
               {isUploading ? "Uploading..." : "📁 Choose Image"}
               <input type="file" accept="image/*" onChange={handleMapUpload} style={{ display: "none" }} />
@@ -1591,75 +1835,80 @@ function BoothMapEditor({ event, onBack, lang }) {
           </div>
         ) : (
           <>
-            {/* Instructions */}
-            <div style={{ background: `${Orange}15`, borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: Orange, fontWeight: 600 }}>
-              💡 Tap anywhere on the map to place a booth
-            </div>
+           {/* Zoom controls */}
+<div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
+  <button
+    onClick={() => setZoom(z => Math.min(z + 0.25, 3))}
+    style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "#fff", fontSize: 18, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.15)", fontWeight: 700 }}
+  >+</button>
+  <button
+    onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))}
+    style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "#fff", fontSize: 18, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.15)", fontWeight: 700 }}
+  >−</button>
+  <button
+    onClick={() => setZoom(1)}
+    style={{ padding: "0 12px", height: 36, borderRadius: 20, border: "none", background: "#fff", fontSize: 12, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.15)", color: "#666" }}
+  >Reset</button>
+</div>
 
-            {/* Map with booths */}
-            <div
-              ref={mapRef}
-              onClick={handleMapClick}
-              style={{ position: "relative", width: "100%", borderRadius: 16, overflow: "hidden", cursor: "crosshair", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", marginBottom: 12 }}
-            >
-              <img src={floorMap} alt="floor map" style={{ width: "100%", display: "block" }} />
-              {booths.map(booth => (
-                <div
-                  key={booth.id}
-                  onClick={(e) => { e.stopPropagation(); setSelectedBooth(selectedBooth?.id === booth.id ? null : booth); }}
-                  style={{
-                    position: "absolute",
-                    left: `${booth.x}%`,
-                    top: `${booth.y}%`,
-                    transform: "translate(-50%, -50%)",
-                    width: 36, height: 36,
-                    borderRadius: 8,
-                    background: selectedBooth?.id === booth.id ? "#06D6A0" : booth.status === "available" ? Orange : "#aaa",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 10, fontWeight: 700, color: "#fff",
-                    cursor: "pointer",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
-                    border: selectedBooth?.id === booth.id ? "2px solid #fff" : "none",
-                    zIndex: 2
-                  }}
-                >
-                  {booth.booth_number}
-                </div>
-              ))}
-            </div>
-
-            {/* Selected booth info */}
-            {selectedBooth && (
-              <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 8 }}>Booth {selectedBooth.booth_number}</div>
-                <div style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>💰 Price: {selectedBooth.price}</div>
-                <div style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>📐 Size: {selectedBooth.size || "Not specified"}</div>
-                <button
-                  onClick={() => handleDeleteBooth(selectedBooth.id)}
-                  style={{ width: "100%", padding: 10, borderRadius: 12, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-                >
-                  🗑️ Delete Booth
-                </button>
-              </div>
-            )}
+{/* Map container with zoom */}
+<div style={{ overflow: "auto", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.1)", marginBottom: 12, border: selectedType ? `2px solid ${selectedType.color}` : "2px solid transparent" }}>
+  <div
+    ref={mapRef}
+    onClick={handleMapClick}
+    style={{
+      position: "relative",
+      width: "100%",
+      transform: `scale(${zoom})`,
+      transformOrigin: "top left",
+      cursor: selectedType ? "crosshair" : "default",
+      transition: "transform 0.2s"
+    }}
+  >
+    <img src={floorMap} alt="floor map" style={{ width: "100%", display: "block", pointerEvents: "none" }} />
+    {booths.map(booth => (
+      <div
+        key={booth.id}
+        onClick={(e) => {
+  if (!selectedType) {
+    handleDeleteBooth(booth.id, e);
+  }
+}}
+        title={`${booth.type_name} | ${booth.price} | ${booth.size} — double-click to delete`}
+        style={{
+          position: "absolute",
+          left: `${booth.x}%`,
+          top: `${booth.y}%`,
+          transform: "translate(-50%, -50%)",
+          width: 10, height: 10,
+          borderRadius: "50%",
+          background: booth.status === "reserved" ? "#aaa" : booth.color || Orange,
+          cursor: "pointer",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+          border: "0.5px solid #fff",
+          zIndex: 2,
+        }}
+      />
+    ))}
+  </div>
+</div>
 
             {/* Stats */}
             <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center" }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: Orange }}>{booths.length}</div>
-                <div style={{ fontSize: 10, color: "#999" }}>Total Booths</div>
+                <div style={{ fontSize: 10, color: "#999" }}>Total</div>
               </div>
-              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: "#06D6A0" }}>{booths.filter(b => b.status === "available").length}</div>
+              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#22C55E" }}>{booths.filter(b => b.status === "available").length}</div>
                 <div style={{ fontSize: 10, color: "#999" }}>Available</div>
               </div>
-              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+              <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: 12, textAlign: "center" }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: "#aaa" }}>{booths.filter(b => b.status === "reserved").length}</div>
                 <div style={{ fontSize: 10, color: "#999" }}>Reserved</div>
               </div>
             </div>
 
-            {/* Change map button */}
             <label style={{ display: "block", padding: "10px", borderRadius: 14, border: `1px solid ${Orange}`, color: Orange, fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "center" }}>
               🔄 Change Floor Map
               <input type="file" accept="image/*" onChange={handleMapUpload} style={{ display: "none" }} />
@@ -1668,28 +1917,43 @@ function BoothMapEditor({ event, onBack, lang }) {
         )}
       </div>
 
-      {/* Add booth form modal */}
-      {showBoothForm && (
+      {/* Add Type Modal */}
+      {showTypeForm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
           <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 24, width: "100%", maxWidth: 480 }}>
             <div style={{ width: 40, height: 4, background: "#eee", borderRadius: 2, margin: "0 auto 20px" }} />
-            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>🎪 Add Booth</div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Booth Number</label>
-              <input style={inputStyle} value={boothForm.booth_number} onChange={e => setBoothForm(p => ({ ...p, booth_number: e.target.value }))} placeholder="e.g. A1, B2" />
+            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>🎨 Add Booth Type</div>
+
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Type Name</label>
+            <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="e.g. Premium, Corner, VIP" value={newType.name} onChange={e => setNewType(p => ({ ...p, name: e.target.value }))} />
+
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>Pick a Color</label>
+            <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+              {colors.map(color => (
+                <div
+                  key={color}
+                  onClick={() => setNewType(p => ({ ...p, color }))}
+                  style={{
+                    width: 36, height: 36, borderRadius: "50%", background: color,
+                    cursor: "pointer",
+                    border: newType.color === color ? "3px solid #111" : "3px solid transparent",
+                    boxShadow: newType.color === color ? "0 0 0 2px #fff, 0 0 0 4px #111" : "none",
+                    transition: "all 0.2s"
+                  }}
+                />
+              ))}
             </div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Price</label>
-              <input style={inputStyle} value={boothForm.price} onChange={e => setBoothForm(p => ({ ...p, price: e.target.value }))} placeholder="e.g. $100, 50 KWD" />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Size</label>
-              <input style={inputStyle} value={boothForm.size} onChange={e => setBoothForm(p => ({ ...p, size: e.target.value }))} placeholder="e.g. 3x3m, 4x4m" />
-            </div>
-            <button onClick={handleAddBooth} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
-              ✓ Add Booth
+
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Price</label>
+            <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="e.g. 250 KWD" value={newType.price} onChange={e => setNewType(p => ({ ...p, price: e.target.value }))} />
+
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Size</label>
+            <input style={{ ...inputStyle, marginBottom: 20 }} placeholder="e.g. 3x3m" value={newType.size} onChange={e => setNewType(p => ({ ...p, size: e.target.value }))} />
+
+            <button onClick={handleAddType} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: newType.name && newType.price ? Orange : "#ccc", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+              ✓ Add Booth Type
             </button>
-            <button onClick={() => setShowBoothForm(false)} style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}>
+            <button onClick={() => setShowTypeForm(false)} style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -1783,8 +2047,8 @@ function BoothMapViewer({ event, onClose, userEmail }) {
         {/* Legend */}
         <div style={{ display: "flex", gap: 12, marginBottom: 12, background: "#fff", borderRadius: 12, padding: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#666" }}>
-            <div style={{ width: 16, height: 16, borderRadius: 4, background: Orange }} />
-            Available
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22C55E" }} />
+Available (color varies by type)
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#666" }}>
             <div style={{ width: 16, height: 16, borderRadius: 4, background: "#aaa" }} />
@@ -1817,11 +2081,10 @@ function BoothMapViewer({ event, onClose, userEmail }) {
                   left: `${booth.x}%`,
                   top: `${booth.y}%`,
                   transform: "translate(-50%, -50%)",
-                  width: 36, height: 36,
+                  width: 10, height: 10,
                   borderRadius: 8,
                   background: booth.status === "reserved" ? "#aaa" : selectedBooth?.id === booth.id ? "#06D6A0" : Orange,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: 700, color: "#fff",
+                 
                   cursor: booth.status === "reserved" ? "not-allowed" : "pointer",
                   boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
                   border: selectedBooth?.id === booth.id ? "2px solid #fff" : "none",
@@ -1829,7 +2092,7 @@ function BoothMapViewer({ event, onClose, userEmail }) {
                   transition: "all 0.2s"
                 }}
               >
-                {booth.booth_number}
+                {/*{booth.booth_number}*/}
               </div>
             ))}
           </div>
@@ -1898,6 +2161,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isVisitor, setIsVisitor] = useState(false);
+
 
   const t = translations[lang];
   const isAr = lang === "ar";
@@ -1952,11 +2217,23 @@ export default function App() {
     </div>
   );
 
-  if (!user) return <AuthScreen onAuth={() => {}} lang={lang} />;
-  if (selectedEvent) return <EventDetail event={selectedEvent} onBack={() => setSelectedEvent(null)} lang={lang} userEmail={user?.email} />;
+  
+
+if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "visitor") setIsVisitor(true); }} lang={lang} />;
+  if (selectedEvent) return <EventDetail event={selectedEvent} onBack={() => setSelectedEvent(null)} lang={lang} userEmail={user?.email} userId={user?.id} />;
   if (showAdmin) return <AdminScreen onBack={() => setShowAdmin(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); setShowAdmin(false); }} user={user} />;
   if (showOrganizer) return <OrganizerScreen onBack={() => setShowOrganizer(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} user={user} userProfile={userProfile} />;
-  if (showProfile) return <ProfileScreen user={user} userProfile={userProfile} onBack={() => setShowProfile(false)} onLogout={handleLogout} lang={lang} />;
+  if (showProfile) return (
+  <ProfileScreen
+    user={user}
+    userProfile={userProfile}
+    onBack={() => setShowProfile(false)}
+    onLogout={handleLogout}
+    lang={lang}
+    onProfileUpdate={(updated) => setUserProfile(updated)}
+    onEventClick={(event) => { setShowProfile(false); setSelectedEvent(event); }}
+  />
+);
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", fontFamily: isAr ? "Arial, sans-serif" : "sans-serif", direction: isAr ? "rtl" : "ltr", display: "flex", flexDirection: "column" }}>
