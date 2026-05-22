@@ -570,7 +570,7 @@ useEffect(() => {
 
 }
 
-function AdminScreen({ onBack, lang, onEventPublished }) {
+function AdminScreen({ onBack, lang, onEventPublished, user }) {
 
 
   const [floorMapUrl, setFloorMapUrl] = useState("");
