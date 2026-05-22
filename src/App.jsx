@@ -87,6 +87,17 @@ organizerRequests: "Organizer Requests",
 noOrganizerRequests: "No organizer requests yet",
 organizerStatus: "Your organizer request is pending approval.",
 youAreOrganizer: "You are an organizer! 🎪",
+visitorProfile: "Visitor Profile",
+visitorName: "Your Name",
+visitorEmail: "Your Email",
+visitorSave: "Save",
+visitorSaved: "Saved!",
+loginRequired: "Please login to attend events",
+loginNow: "Login Now",
+forgotPassword: "Forgot Password?",
+resetPassword: "Reset Password",
+resetSent: "Check your email for a reset link!",
+resetEmail: "Enter your email to reset password",
   },
 
   ar: {
@@ -163,6 +174,17 @@ organizerRequests: "طلبات المنظمين",
 noOrganizerRequests: "لا توجد طلبات بعد",
 organizerStatus: "طلبك قيد المراجعة.",
 youAreOrganizer: "أنت منظم فعاليات! 🎪",
+visitorProfile: "ملف الزائر",
+visitorName: "اسمك",
+visitorEmail: "بريدك الإلكتروني",
+visitorSave: "حفظ",
+visitorSaved: "تم الحفظ!",
+loginRequired: "يرجى تسجيل الدخول للمشاركة في الفعاليات",
+loginNow: "تسجيل الدخول",
+forgotPassword: "نسيت كلمة المرور؟",
+resetPassword: "إعادة تعيين كلمة المرور",
+resetSent: "تحقق من بريدك الإلكتروني!",
+resetEmail: "أدخل بريدك الإلكتروني لإعادة تعيين كلمة المرور",
   }
 };
 
@@ -491,8 +513,11 @@ useEffect(() => {
   </button>
 )}
         <button
-  onClick={async () => {
-    if (!userEmail) return;
+ onClick={async () => {
+  if (!userEmail) {
+    alert(translations[lang]?.loginRequired || "Please login to attend events");
+    return;
+  }
     try {
       if (isAttending) {
         // Remove attendance
@@ -1022,6 +1047,10 @@ useEffect(() => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+const [resetEmail, setResetEmail] = useState("");
+const [resetSent, setResetSent] = useState(false);
+const [resetLoading, setResetLoading] = useState(false);
 
   const inputStyle = {
     width: "100%", padding: "12px 16px", borderRadius: 14,
@@ -1059,50 +1088,106 @@ useEffect(() => {
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", padding: 24, background: "#f8f8f8", direction: isAr ? "rtl" : "ltr" }}>
       <img src="/mainEventi.png" alt="eventi" style={{ width: 160, height: 160, objectFit: "contain", marginBottom: 8 }} />
       <div style={{ marginBottom: 32 }} />
-      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
-        {!isLogin && (
+
+      {/* Forgot Password Screen */}
+      {showForgotPassword && (
+        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+          <button onClick={() => setShowForgotPassword(false)} style={{ background: "none", border: "none", color: "#999", fontSize: 13, cursor: "pointer", textAlign: isAr ? "right" : "left", padding: 0 }}>
+            ← {isAr ? "رجوع" : "Back"}
+          </button>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#111", textAlign: "center" }}>🔐</div>
+          <div style={{ fontSize: 14, color: "#999", textAlign: "center" }}>{t.resetEmail}</div>
+          <input
+            style={{ width: "100%", padding: "12px 16px", borderRadius: 14, border: "1px solid #eee", background: "#f8f8f8", fontSize: 14, outline: "none", boxSizing: "border-box", direction: isAr ? "rtl" : "ltr" }}
+            placeholder="john@email.com"
+            value={resetEmail}
+            onChange={e => setResetEmail(e.target.value)}
+            type="email"
+          />
+          {resetSent && (
+            <div style={{ background: "#E1F5EE", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#085041", textAlign: "center" }}>
+              ✅ {t.resetSent}
+            </div>
+          )}
+          <button
+            onClick={async () => {
+              if (!resetEmail) return;
+              setResetLoading(true);
+              try {
+                const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+                  redirectTo: "https://ateventi.com"
+                });
+                if (error) throw error;
+                setResetSent(true);
+              } catch (err) {
+                console.error(err);
+              } finally {
+                setResetLoading(false);
+              }
+            }}
+            disabled={resetLoading || !resetEmail}
+            style={{
+              width: "100%", padding: 14, borderRadius: 16, border: "none",
+              background: resetLoading || !resetEmail ? "#ccc" : Orange,
+              color: "#fff", fontSize: 15, fontWeight: 700,
+              cursor: resetLoading || !resetEmail ? "not-allowed" : "pointer"
+            }}
+          >
+            {resetLoading ? "..." : t.resetPassword}
+          </button>
+        </div>
+      )}
+
+      {/* Login / Signup Form */}
+      {!showForgotPassword && (
+        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+          {!isLogin && (
+            <div>
+              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.name}</label>
+              <input style={inputStyle} placeholder="John Smith" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+          )}
           <div>
-            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.name}</label>
-            <input style={inputStyle} placeholder="John Smith" value={name} onChange={e => setName(e.target.value)} />
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.email}</label>
+            <input style={inputStyle} placeholder="john@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
           </div>
-        )}
-        <div>
-          <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.email}</label>
-          <input style={inputStyle} placeholder="john@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
+          <div>
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.password}</label>
+            <input style={inputStyle} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} type="password" />
+          </div>
+          {isLogin && (
+            <button onClick={() => setShowForgotPassword(true)} style={{ background: "none", border: "none", color: "#999", fontSize: 12, cursor: "pointer", textAlign: isAr ? "right" : "left", padding: 0 }}>
+              {t.forgotPassword}
+            </button>
+          )}
+          {error && <div style={{ color: "red", fontSize: 12, textAlign: "center" }}>{error}</div>}
+          <button onClick={handleAuth} disabled={loading} style={{
+            width: "100%", padding: 14, borderRadius: 16, border: "none",
+            background: loading ? "#ccc" : Orange, color: "#fff",
+            fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer"
+          }}>
+            {loading ? "..." : isLogin ? t.login : t.signup}
+          </button>
+          <button onClick={() => { setIsLogin(!isLogin); setError(""); }} style={{
+            background: "none", border: "none", color: Orange,
+            fontSize: 13, cursor: "pointer", textAlign: "center"
+          }}>
+            {isLogin ? t.noAccount : t.haveAccount}
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "#eee" }} />
+            <span style={{ fontSize: 11, color: "#ccc" }}>or</span>
+            <div style={{ flex: 1, height: 1, background: "#eee" }} />
+          </div>
+          <button onClick={() => onAuth("visitor")} style={{
+            width: "100%", padding: 14, borderRadius: 16,
+            border: "1px solid #eee", background: "#fff",
+            color: "#666", fontSize: 15, fontWeight: 600, cursor: "pointer"
+          }}>
+            {lang === "ar" ? "متابعة كزائر 👀" : "Continue as Visitor 👀"}
+          </button>
         </div>
-        <div>
-          <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.password}</label>
-          <input style={inputStyle} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} type="password" />
-        </div>
-        {error && <div style={{ color: "red", fontSize: 12, textAlign: "center" }}>{error}</div>}
-        <button onClick={handleAuth} disabled={loading} style={{
-          width: "100%", padding: 14, borderRadius: 16, border: "none",
-          background: loading ? "#ccc" : Orange, color: "#fff",
-          fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer"
-        }}>
-          {loading ? "..." : isLogin ? t.login : t.signup}
-        </button>
-      <button onClick={() => { setIsLogin(!isLogin); setError(""); }} style={{
-  background: "none", border: "none", color: Orange,
-  fontSize: 13, cursor: "pointer", textAlign: "center"
-}}>
-  {isLogin ? t.noAccount : t.haveAccount}
-</button>
-
-<div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0" }}>
-  <div style={{ flex: 1, height: 1, background: "#eee" }} />
-  <span style={{ fontSize: 11, color: "#ccc" }}>or</span>
-  <div style={{ flex: 1, height: 1, background: "#eee" }} />
-</div>
-
-<button onClick={() => onAuth("visitor")} style={{
-  width: "100%", padding: 14, borderRadius: 16,
-  border: "1px solid #eee", background: "#fff",
-  color: "#666", fontSize: 15, fontWeight: 600, cursor: "pointer"
-}}>
-  {lang === "ar" ? "متابعة كزائر 👀" : "Continue as Visitor 👀"}
-</button>
-      </div>
+      )}
     </div>
   );
 }
@@ -2147,6 +2232,117 @@ Available (color varies by type)
 }
 
 
+//Add VisitorProfile component
+
+function VisitorProfile({ onClose, lang, visitorInfo, onSave, onLoginClick }) {
+  const t = translations[lang];
+  const isAr = lang === "ar";
+  const [name, setName] = useState(visitorInfo.name || "");
+  const [email, setEmail] = useState(visitorInfo.email || "");
+  const [avatarUrl, setAvatarUrl] = useState(visitorInfo.avatar_url || null);
+  const [uploading, setUploading] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fileName = `visitor-${Math.random()}.${file.name.split(".").pop()}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      setAvatarUrl(urlData.publicUrl);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSave = () => {
+    onSave({ name, email, avatar_url: avatarUrl });
+    setSaved(true);
+    setTimeout(() => { setSaved(false); onClose(); }, 1000);
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "10px 14px", borderRadius: 12,
+    border: "1px solid #eee", background: "#f8f8f8",
+    fontSize: 13, outline: "none", boxSizing: "border-box",
+    direction: isAr ? "rtl" : "ltr",
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex" }}>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{ flex: 1, background: "rgba(0,0,0,0.5)" }} />
+      {/* Side panel */}
+      <div style={{
+        width: 300, background: "#fff", padding: 24,
+        overflowY: "auto", direction: isAr ? "rtl" : "ltr",
+        animation: "slideIn 0.3s ease"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{t.visitorProfile}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#999" }}>✕</button>
+        </div>
+
+        {/* Avatar */}
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", overflow: "hidden", background: `${Orange}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, border: `3px solid ${Orange}`, margin: "0 auto" }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span>👤</span>
+              )}
+            </div>
+            <label style={{
+              position: "absolute", bottom: 0, right: 0,
+              width: 26, height: 26, borderRadius: "50%",
+              background: Orange, display: "flex", alignItems: "center",
+              justifyContent: "center", cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.2)", fontSize: 14
+            }}>
+              {uploading ? "⏳" : "📷"}
+              <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: "none" }} />
+            </label>
+          </div>
+        </div>
+
+        {/* Name */}
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.visitorName}</label>
+        <input style={{ ...inputStyle, marginBottom: 12 }} placeholder="John Smith" value={name} onChange={e => setName(e.target.value)} />
+
+        {/* Email */}
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.visitorEmail}</label>
+        <input style={{ ...inputStyle, marginBottom: 24 }} placeholder="john@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
+
+        {/* Save button */}
+        <button onClick={handleSave} style={{
+          width: "100%", padding: 14, borderRadius: 16, border: "none",
+          background: saved ? "#06D6A0" : Orange,
+          color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
+          transition: "background 0.3s"
+        }}>
+          {saved ? `✅ ${t.visitorSaved}` : t.visitorSave}
+        </button>
+
+        <div style={{ marginTop: 16, textAlign: "center" }}>
+          <span style={{ fontSize: 12, color: "#999" }}>Want full access? </span>
+          <button onClick={() => { onClose(); onLoginClick(); }} style={{ background: "none", border: "none", color: Orange, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+  Login / Sign Up
+</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -2162,6 +2358,8 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isVisitor, setIsVisitor] = useState(false);
+  const [visitorInfo, setVisitorInfo] = useState({ name: "", email: "", avatar_url: null });
+const [showVisitorProfile, setShowVisitorProfile] = useState(false);
 
 
   const t = translations[lang];
@@ -2273,11 +2471,23 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
                 background: "#6B21A8", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer"
               }}>🎪 Organizer</button>
             )}
-            <button onClick={() => setShowProfile(true)} style={{
-              width: 32, height: 32, borderRadius: "50%", border: "none",
-              background: `${Orange}22`, color: Orange, fontSize: 16, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center"
-            }}>👤</button>
+
+            <button
+  onClick={() => { if (user) setShowProfile(true); else setShowVisitorProfile(true); }}
+  style={{
+    width: 32, height: 32, borderRadius: "50%", border: "none",
+    background: `${Orange}22`, color: Orange, fontSize: 16, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    overflow: "hidden"
+  }}
+>
+  
+  {isVisitor && visitorInfo.avatar_url ? (
+    <img src={visitorInfo.avatar_url} alt="visitor" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+  ) : (
+    "👤"
+  )}
+</button>
           </div>
         </div>
       </div>
@@ -2321,6 +2531,16 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
           </div>
         )}
       </div>
+      
+     {showVisitorProfile && (
+  <VisitorProfile
+    onClose={() => setShowVisitorProfile(false)}
+    lang={lang}
+    visitorInfo={visitorInfo}
+    onSave={(info) => setVisitorInfo(info)}
+    onLoginClick={() => { setShowVisitorProfile(false); setIsVisitor(false); }}
+  />
+)}
     </div>
   );
 }
