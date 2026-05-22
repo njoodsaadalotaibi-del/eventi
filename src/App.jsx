@@ -700,7 +700,7 @@ useEffect(() => {
     setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: imageUrl, floor_map_url: floorMapUrl, distance: "Nearby",  
+        name: eventName, category: selectedCat, image_url: imageUrl, floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -1345,7 +1345,7 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
           </div>
         )}
 
-        {/* Tabs */}
+       {/* Tabs */}
         <div style={{ background: "#fff", borderRadius: 14, display: "flex", marginBottom: 16, overflow: "hidden" }}>
           {[["reservations", "🎪 Reservations"], ["calendar", "📅 My Calendar"]].map(([tab, label]) => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{
@@ -1362,12 +1362,14 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
         {activeTab === "reservations" && (
           <>
             {loading && <div style={{ textAlign: "center", color: Orange, padding: 20 }}>⏳</div>}
-            {!loading && myReservations.length === 0 && <div style={{ textAlign: "center", color: "#999", padding: 20 }}>{t.noMyReservations}</div>}
+            {!loading && myReservations.length === 0 && (
+              <div style={{ textAlign: "center", color: "#999", padding: 20 }}>{t.noMyReservations}</div>
+            )}
             {!loading && myReservations.map(res => (
               <div key={res.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{res.event_name}</div>
                 <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>🎪 {res.booth_type}</div>
-                <div style={{ marginTop: 6 }}>
+                <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{
                     padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
                     background: res.status === "approved" ? "#E1F5EE" : res.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
@@ -1375,7 +1377,29 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
                   }}>
                     {res.status === "approved" ? t.approved : res.status === "rejected" ? t.rejected : t.pending}
                   </span>
+                  {res.payment_status === "paid" && (
+                    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "#E1F5EE", color: "#085041" }}>
+                      💰 Paid
+                    </span>
+                  )}
                 </div>
+                {/* Payment link */}
+                {res.payment_link && res.payment_status !== "paid" && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 12, color: "#633806", marginBottom: 6 }}>💳 Payment required to confirm your booth:</div>
+                    
+                     <a href={res.payment_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ display: "block", width: "100%", padding: "10px 0", borderRadius: 12, background: Orange, color: "#fff", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}
+                      onClick={async () => {
+                        await supabase.from("reservations").update({ payment_status: "paid" }).eq("id", res.id);
+                      }}
+                    >
+                      💳 Pay Now
+                    </a>
+                  </div>
+                )}
               </div>
             ))}
           </>
@@ -1393,8 +1417,9 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
             )}
             {!loading && myEvents.map(item => (
               <div key={item.id} onClick={() => onEventClick(item.events)} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", gap: 12, alignItems: "center", cursor: "pointer" }}
-onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
-onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
+                onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+                onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
+              >
                 {item.events?.image_url ? (
                   <img src={item.events.image_url} alt={item.events?.name} style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
                 ) : (
@@ -1410,12 +1435,13 @@ onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
             ))}
           </>
         )}
+
       </div>
     </div>
   );
 }
 
-function OrganizerScreen({ onBack, lang, onEventPublished, userProfile }) {
+function OrganizerScreen({ onBack, lang, onEventPublished, userProfile, user }) {
 
 
   const [floorMapUrl, setFloorMapUrl] = useState("");
@@ -1465,16 +1491,28 @@ const [publishedEvent, setPublishedEvent] = useState(null);
   fetchMyEvents();
 }, [activeTab]);
 
-  useEffect(() => {
-    if (activeTab !== "reservations") return;
-    const fetchReservations = async () => {
-      setLoadingRes(true);
-      const { data } = await supabase.from("reservations").select("*").order("created_at", { ascending: false });
-      setMyReservations(data || []);
-      setLoadingRes(false);
-    };
-    fetchReservations();
-  }, [activeTab]);
+ useEffect(() => {
+  if (activeTab !== "reservations") return;
+  const fetchReservations = async () => {
+    setLoadingRes(true);
+    // Get organizer's events first
+    const { data: myEventIds } = await supabase
+      .from("events")
+      .select("id")
+      .eq("organizer_id", user?.id);
+    const ids = (myEventIds || []).map(e => e.id);
+    if (ids.length === 0) { setMyReservations([]); setLoadingRes(false); return; }
+    // Get reservations for those events
+    const { data } = await supabase
+      .from("reservations")
+      .select("*")
+      .in("event_id", ids)
+      .order("created_at", { ascending: false });
+    setMyReservations(data || []);
+    setLoadingRes(false);
+  };
+  fetchReservations();
+}, [activeTab, user]);
 
   const inputStyle = {
     width: "100%", padding: "10px 14px", borderRadius: 12,
@@ -1488,7 +1526,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
     setIsPublishing(true); setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: imageUrl,  floor_map_url: floorMapUrl, distance: "Nearby",  
+        name: eventName, category: selectedCat, image_url: imageUrl,  floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -1718,19 +1756,109 @@ if (published) return (
           }}>{isPublishing ? t.publishing : t.publish}</button>
         </div>
       )}
-      {activeTab === "reservations" && (
-        <div style={{ padding: 20 }}>
-          {loadingRes && <div style={{ textAlign: "center", color: Orange, padding: 40 }}>⏳</div>}
-          {!loadingRes && myReservations.length === 0 && <div style={{ textAlign: "center", color: "#999", padding: 40 }}>{t.noReservations}</div>}
-          {!loadingRes && myReservations.map(res => (
-            <div key={res.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{res.name}</div>
-              <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{res.email}</div>
-              <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>🎪 {res.booth_type} · {res.event_name}</div>
-            </div>
-          ))}
+     
+
+     {activeTab === "reservations" && (
+  <div style={{ padding: 20 }}>
+    {loadingRes && <div style={{ textAlign: "center", color: Orange, padding: 40 }}>⏳</div>}
+    {!loadingRes && myReservations.length === 0 && (
+      <div style={{ textAlign: "center", color: "#999", padding: 40 }}>No reservations yet</div>
+    )}
+    {!loadingRes && myReservations.map(res => (
+      <div key={res.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{res.name}</div>
+            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{res.email}</div>
+            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>🎪 {res.booth_type}</div>
+            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {res.event_name}</div>
+          </div>
+          <span style={{
+            padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+            background: res.status === "approved" ? "#E1F5EE" : res.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
+            color: res.status === "approved" ? "#085041" : res.status === "rejected" ? "#c62828" : "#633806"
+          }}>
+            {res.status === "approved" ? "Approved" : res.status === "rejected" ? "Rejected" : "Pending"}
+          </span>
         </div>
-      )}
+
+        {/* Payment status */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{
+            padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+            background: res.payment_status === "paid" ? "#E1F5EE" : "#FEF3E2",
+            color: res.payment_status === "paid" ? "#085041" : "#633806"
+          }}>
+            💰 {res.payment_status === "paid" ? "Paid" : "Unpaid"}
+          </span>
+        </div>
+
+        {/* Approve/Reject buttons */}
+        {res.status === "pending" && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button
+              onClick={async () => {
+                await supabase.from("reservations").update({ status: "approved" }).eq("id", res.id);
+                setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, status: "approved" } : r));
+              }}
+              style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >
+              ✓ Approve
+            </button>
+            <button
+              onClick={async () => {
+                await supabase.from("reservations").update({ status: "rejected" }).eq("id", res.id);
+                setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, status: "rejected" } : r));
+              }}
+              style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >
+              ✕ Reject
+            </button>
+          </div>
+        )}
+
+        {/* Payment link - only show after approval */}
+        {res.status === "approved" && (
+          <div style={{ marginTop: 4 }}>
+            {res.payment_link ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: "#085041" }}>✅ Payment link sent</span>
+                <button
+                  onClick={async () => {
+                    await supabase.from("reservations").update({ payment_link: null }).eq("id", res.id);
+                    setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, payment_link: null } : r));
+                  }}
+                  style={{ fontSize: 10, color: "#999", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  placeholder="Paste payment link..."
+                  id={`payment-${res.id}`}
+                  style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: "1px solid #eee", fontSize: 12, outline: "none" }}
+                />
+                <button
+                  onClick={async () => {
+                    const link = document.getElementById(`payment-${res.id}`).value;
+                    if (!link) return;
+                    await supabase.from("reservations").update({ payment_link: link }).eq("id", res.id);
+                    setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, payment_link: link } : r));
+                  }}
+                  style={{ padding: "6px 12px", borderRadius: 8, border: "none", background: Orange, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Send
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+)}
 
       {activeTab === "events" && (
   <div style={{ padding: 20 }}>
