@@ -1076,13 +1076,18 @@ const [resetLoading, setResetLoading] = useState(false);
         if (authError) throw authError;
       }
       onAuth();
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+   } catch (err) {
+  console.error(err);
+  if (err.message.includes("Invalid login credentials")) {
+    setError("Incorrect email or password. Please try again.");
+  } else if (err.message.includes("Email not confirmed")) {
+    setError("Please confirm your email first. Check your inbox.");
+  } else if (err.message.includes("Too many requests")) {
+    setError("Too many attempts. Please wait a few minutes and try again.");
+  } else {
+    setError(err.message);
+  }
+}
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", padding: 24, background: "#f8f8f8", direction: isAr ? "rtl" : "ltr" }}>
@@ -1521,6 +1526,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
     direction: isAr ? "rtl" : "ltr",
   };
 
+
   const handlePublish = async () => {
     if (!eventName || !location) { setError(t.fillRequired); return; }
     setIsPublishing(true); setError("");
@@ -1571,7 +1577,6 @@ console.log("published!", data[0]);
 
     
   }
-
 
 };
 
