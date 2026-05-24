@@ -222,9 +222,11 @@ function EventCard({ event, onClick, lang }) {
         <div style={{ position: "absolute", top: 8, right: 8, background: Orange, color: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
           {event.price}
         </div>
-        <div style={{ position: "absolute", bottom: 8, left: 8, background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11, fontWeight: 500 }}>
-          {event.date}
-        </div>
+        {event.date && event.date !== "TBD" && (
+  <div style={{ position: "absolute", bottom: 8, left: 8, background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11, fontWeight: 500 }}>
+    {event.date}
+  </div>
+)}
       </div>
       <div style={{ padding: "12px 14px" }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 4 }}>{event.name}</div>
@@ -398,7 +400,20 @@ function MapScreen({ events, onEventSelected, t }) {
           <div style={{ width: 56, height: 56, borderRadius: 12, background: `${Orange}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🎉</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{selectedEvent.name}</div>
-            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {selectedEvent.location}</div>
+            <a
+  href={`https://www.google.com/maps/search/?api=1&query=${selectedEvent.lat},${selectedEvent.lng}`}
+  target="_blank"
+  rel="noreferrer"
+  style={{
+    fontSize: 11,
+    color: Orange,
+    marginTop: 2,
+    display: "block",
+    textDecoration: "none",
+  }}
+>
+  📍 {selectedEvent.location} →
+</a>
             <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{selectedEvent.price} · {selectedEvent.date}</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -455,13 +470,19 @@ useEffect(() => {
       </div>
       <div style={{ padding: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#111", margin: "0 0 6px" }}>{event.name}</h2>
-        <div style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>📍 {event.location}</div>
+        <a href={`https://www.google.com/maps/search/?api=1&query=${event.lat},${event.lng}`}
+  target="_blank"
+  rel="noreferrer"
+  style={{ fontSize: 12, color: Orange, marginBottom: 12, display: "block", textDecoration: "none" }}
+>
+  📍 {event.location} →
+</a>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-          {[["📅", event.date], ["⏰", event.time], ["📍", event.distance]].map(([emoji, text]) => (
-            <div key={text} style={{ background: "#fff", borderRadius: 20, padding: "6px 12px", fontSize: 11, color: "#666", display: "flex", gap: 4, alignItems: "center" }}>
-              {emoji} {text}
-            </div>
-          ))}
+        {[["📅", event.date], ["⏰", event.time], ["📍", event.distance]].filter(([, text]) => text && text !== "TBD").map(([emoji, text]) => (
+  <div key={text} style={{ background: "#fff", borderRadius: 20, padding: "6px 12px", fontSize: 11, color: "#666", display: "flex", gap: 4, alignItems: "center" }}>
+    {emoji} {text}
+  </div>
+))}
         </div>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111", margin: "0 0 8px" }}>{t.about}</h3>
         <p style={{ fontSize: 13, color: "#666", lineHeight: 1.7, margin: "0 0 16px" }}>{event.description}</p>
@@ -499,6 +520,21 @@ useEffect(() => {
   </div>
 )}
 
+
+{/* Host info */}
+<div style={{ background: "#fff", borderRadius: 16, padding: 16, display: "flex", marginBottom: 16 }}>
+  <div style={{ flex: 1, textAlign: "center" }}>
+    <div style={{ fontSize: 24 }}>🏢</div>
+    <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Hosted by</div>
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.host || "Organizer"}</div>
+  </div>
+  <div style={{ width: 1, background: "#eee" }} />
+  <div style={{ flex: 1, textAlign: "center" }}>
+    <div style={{ fontSize: 24 }}>🎪</div>
+    <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Booths available</div>
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.booths} booths</div>
+  </div>
+</div>
        {event.floor_map_url && (
   <button
     onClick={() => setShowBoothMapViewer(true)}
@@ -573,6 +609,7 @@ useEffect(() => {
 function AdminScreen({ onBack, lang, onEventPublished, user }) {
 
 
+
   const [floorMapUrl, setFloorMapUrl] = useState("");
   const [myEvents, setMyEvents] = useState([]);
 const [loadingEvents, setLoadingEvents] = useState(false);
@@ -602,6 +639,10 @@ const [locationSuggestions, setLocationSuggestions] = useState([]);
 const [lat, setLat] = useState(29.3759);
 const [lng, setLng] = useState(47.9774);
 
+  const [editingEvent, setEditingEvent] = useState(null);
+
+
+
 
 
 useEffect(() => {
@@ -609,9 +650,9 @@ useEffect(() => {
   const fetchMyEvents = async () => {
     setLoadingEvents(true);
     const { data } = await supabase
-      .from("events")
-      .select("*")
-      .order("id", { ascending: false });
+  .from("events")
+  .select("*")
+  .order("id", { ascending: false });
     setMyEvents(data || []);
     setLoadingEvents(false);
   };
@@ -675,27 +716,17 @@ useEffect(() => {
   const handleDeleteEvent = async (eventId) => {
   if (!window.confirm("Are you sure you want to delete this event?")) return;
   try {
-    // Delete reservations first
-    await supabase.from("reservations").delete().eq("event_id", eventId);
-    
-    // Delete booths
+    // Delete in correct order to avoid foreign key errors
+    await supabase.from("attendees").delete().eq("event_id", eventId);
     await supabase.from("booths").delete().eq("event_id", eventId);
-    
-    // Delete event
+    await supabase.from("reservations").delete().eq("event_id", eventId);
     const { error } = await supabase.from("events").delete().eq("id", eventId);
-    
-    if (error) {
-      console.error("Delete error:", error);
-      alert("Failed to delete event: " + error.message);
-      return;
-    }
-    
-    // Remove from local state
+    if (error) throw error;
     setMyEvents(prev => prev.filter(e => e.id !== eventId));
-    alert("Event deleted successfully!");
+    alert("✅ Event deleted successfully!");
   } catch (err) {
     console.error(err);
-    alert("Something went wrong!");
+    alert("Failed to delete event: " + err.message);
   }
 };
 
@@ -1040,23 +1071,184 @@ useEffect(() => {
             )}
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
             <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
+<div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
+<div style={{ fontSize: 11, color: "#6B21A8", marginTop: 2 }}>
+  👤 {event.users?.name || event.users?.email || "Admin"}
+</div>
             <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
             <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
           </div>
         </div>
-        <button
-          onClick={() => handleDeleteEvent(event.id)}
-          style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-        >
-          🗑️ Delete Event
-        </button>
+       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+  <button
+    onClick={() => setEditingEvent(event)}
+    style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+  >
+    ✏️ Edit
+  </button>
+  <button
+    onClick={() => handleDeleteEvent(event.id)}
+    style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+  >
+    🗑️ Delete
+  </button>
+</div>
       </div>
     ))}
   </div>
 )}
+{editingEvent && (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
+    <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 24, width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ width: 40, height: 4, background: "#eee", borderRadius: 2, margin: "0 auto 20px" }} />
+      <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>✏️ Edit Event</div>
+
+    {[
+  { label: "Event Name", key: "name" },
+  { label: "Price", key: "price" },
+].map(field => (
+  <div key={field.key} style={{ marginBottom: 10 }}>
+    <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{field.label}</label>
+    <input
+      value={editingEvent[field.key] || ""}
+      onChange={e => setEditingEvent(prev => ({ ...prev, [field.key]: e.target.value }))}
+      style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+    />
+  </div>
+))}
+
+
+      {/* Location with autocomplete */}
+<div style={{ marginBottom: 10, position: "relative" }}>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Location</label>
+  <input
+    value={editingEvent.location || ""}
+    onChange={async (e) => {
+      setEditingEvent(prev => ({ ...prev, location: e.target.value }));
+      if (e.target.value.length < 2) { setLocationSuggestions([]); return; }
+      clearTimeout(window.locationTimeout);
+      window.locationTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw&accept-language=en`,
+            { headers: { "Accept-Language": "en", "User-Agent": "ateventi/1.0" } }
+          );
+          const data = await res.json();
+          setLocationSuggestions(data.map(place => ({
+            formatted_address: place.display_name,
+            geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
+          })));
+        } catch (err) { console.error(err); }
+      }, 400);
+    }}
+    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+    placeholder="Search for a location..."
+  />
+  {locationSuggestions.length > 0 && (
+    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
+      {locationSuggestions.map((place, i) => (
+        <div
+          key={i}
+          onClick={() => {
+            setEditingEvent(prev => ({
+              ...prev,
+              location: place.formatted_address,
+              lat: place.geometry.location.lat,
+              lng: place.geometry.location.lng
+            }));
+            setLocationSuggestions([]);
+          }}
+          style={{ padding: "10px 14px", fontSize: 13, color: "#111", cursor: "pointer", borderBottom: "1px solid #f5f5f5" }}
+          onMouseEnter={e => e.currentTarget.style.background = "#f8f8f8"}
+          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+        >
+          📍 {place.formatted_address}
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
+
+    {/* Date picker */}
+<div style={{ marginBottom: 10 }}>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Date</label>
+  <input
+    type="date"
+    value={editingEvent.date || ""}
+    onChange={e => setEditingEvent(prev => ({ ...prev, date: e.target.value }))}
+    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+  />
+</div>
+
+      
+{/* Time picker */}
+<div style={{ marginBottom: 10 }}>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Time</label>
+  <input
+    type="time"
+    value={editingEvent.time || ""}
+    onChange={e => setEditingEvent(prev => ({ ...prev, time: e.target.value }))}
+    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+  />
+</div>
+
+{/* Description */}
+<div style={{ marginBottom: 16 }}>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Description</label>
+  <textarea
+    value={editingEvent.description || ""}
+    onChange={e => setEditingEvent(prev => ({ ...prev, description: e.target.value }))}
+    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", minHeight: 80, resize: "vertical" }}
+  />
+</div>
+    
+    <button
+  onClick={async () => {
+    try {
+      const { error } = await supabase
+        .from("events")
+        .update({
+          name: editingEvent.name,
+          location: editingEvent.location,
+          lat: editingEvent.lat,
+          lng: editingEvent.lng,
+          date: editingEvent.date,
+          time: editingEvent.time,
+          price: editingEvent.price,
+          description: editingEvent.description,
+        })
+        .eq("id", editingEvent.id);
+      if (error) throw error;
+      setMyEvents(prev => prev.map(e => e.id === editingEvent.id ? editingEvent : e));
+      setEditingEvent(null);
+      alert("✅ Event updated!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update: " + err.message);
+    }
+  }}
+  style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
+>
+  💾 Save Changes
+</button>
+<button onClick={() => setEditingEvent(null)}
+  style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}
+>
+  Cancel
+</button>
+</div>
+</div>
+)}
     </div>
   );
-  } 
+}
+    
+    
+
+
+  
 
   //added new func for login
   function AuthScreen({ onAuth, lang }) {
@@ -1238,6 +1430,13 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
   const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatar_url || null);
   const [orgForm, setOrgForm] = useState({ company_name: "", event_type: "", phone: "", contact_email: user.email, instagram: "", reason: "", has_organized_before: false });
 
+const [showEditProfile, setShowEditProfile] = useState(false);
+const [editName, setEditName] = useState(userProfile?.name || "");
+const [editPhone, setEditPhone] = useState(userProfile?.phone || "");
+const [editEmail, setEditEmail] = useState(user.email || "");
+const [savingProfile, setSavingProfile] = useState(false);
+const [profileSaved, setProfileSaved] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       // Fetch reservations
@@ -1370,6 +1569,15 @@ const handleOrganizerRequest = async () => {
 >
   🔄 Refresh
 </button>
+
+{/* ← Add edit profile button here */}
+  <button
+    onClick={() => setShowEditProfile(true)}
+    style={{ marginTop: 8, padding: "6px 16px", borderRadius: 20, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+  >
+    ✏️ Edit Profile
+  </button>
+
           </div>
         </div>
 
@@ -1484,6 +1692,18 @@ const handleOrganizerRequest = async () => {
                       💰 Paid
                     </span>
                   )}
+{/* Rejection message */}
+{res.status === "rejected" && res.rejection_message && (
+  <div style={{ marginTop: 8, background: "#FFEBEE", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#c62828" }}>
+    💬 Reason: {res.rejection_message}
+  </div>
+)}
+
+{/* Payment timer */}
+{res.status === "approved" && res.payment_link && res.payment_status !== "paid" && res.payment_deadline && (
+  <PaymentTimer deadline={res.payment_deadline} />
+)}
+                  
                 </div>
                 {/* Payment link */}
                 {res.payment_link && res.payment_status !== "paid" && (
@@ -1539,6 +1759,85 @@ const handleOrganizerRequest = async () => {
         )}
 
       </div>
+      {/* Edit Profile Modal */}
+{showEditProfile && (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
+    <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 24, width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ width: 40, height: 4, background: "#eee", borderRadius: 2, margin: "0 auto 20px" }} />
+      <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 20 }}>✏️ Edit Profile</div>
+
+      <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Full Name</label>
+      <input
+        value={editName}
+        onChange={e => setEditName(e.target.value)}
+        placeholder="John Smith"
+        style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 12 }}
+      />
+
+      <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Phone Number</label>
+      <input
+        value={editPhone}
+        onChange={e => setEditPhone(e.target.value)}
+        placeholder="+965 XXXX XXXX"
+        type="tel"
+        style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 12 }}
+      />
+
+      <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Email</label>
+      <input
+        value={editEmail}
+        onChange={e => setEditEmail(e.target.value)}
+        placeholder="john@email.com"
+        type="email"
+        style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 20 }}
+      />
+
+      {profileSaved && (
+        <div style={{ background: "#E1F5EE", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#085041", textAlign: "center", marginBottom: 12 }}>
+          ✅ Profile updated successfully!
+        </div>
+      )}
+
+      <button
+        onClick={async () => {
+          setSavingProfile(true);
+          try {
+            await supabase.from("users").update({
+              name: editName,
+              phone: editPhone,
+            }).eq("id", user.id);
+
+            if (editEmail !== user.email) {
+              await supabase.auth.updateUser({ email: editEmail });
+            }
+
+            if (onProfileUpdate) onProfileUpdate({ ...userProfile, name: editName, phone: editPhone });
+            setProfileSaved(true);
+            setTimeout(() => {
+              setProfileSaved(false);
+              setShowEditProfile(false);
+            }, 1500);
+          } catch (err) {
+            console.error(err);
+            alert("Failed to update profile: " + err.message);
+          } finally {
+            setSavingProfile(false);
+          }
+        }}
+        disabled={savingProfile}
+        style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: savingProfile ? "#ccc" : Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: savingProfile ? "not-allowed" : "pointer", marginBottom: 8 }}
+      >
+        {savingProfile ? "Saving..." : "💾 Save Changes"}
+      </button>
+      <button
+        onClick={() => setShowEditProfile(false)}
+        style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }
@@ -1651,31 +1950,18 @@ console.log("published!", data[0]);
   const handleDeleteEvent = async (eventId) => {
   if (!window.confirm("Are you sure you want to delete this event?")) return;
   try {
-    // Delete reservations first
-    await supabase.from("reservations").delete().eq("event_id", eventId);
-    
-    // Delete booths
+    // Delete in correct order to avoid foreign key errors
+    await supabase.from("attendees").delete().eq("event_id", eventId);
     await supabase.from("booths").delete().eq("event_id", eventId);
-    
-    // Delete event
+    await supabase.from("reservations").delete().eq("event_id", eventId);
     const { error } = await supabase.from("events").delete().eq("id", eventId);
-    
-    if (error) {
-      console.error("Delete error:", error);
-      alert("Failed to delete event: " + error.message);
-      return;
-    }
-    
-    // Remove from local state
+    if (error) throw error;
     setMyEvents(prev => prev.filter(e => e.id !== eventId));
-    alert("Event deleted successfully!");
+    alert("✅ Event deleted successfully!");
   } catch (err) {
     console.error(err);
-    alert("Something went wrong!");
-
-    
+    alert("Failed to delete event: " + err.message);
   }
-
 };
 
 
@@ -1867,99 +2153,102 @@ if (published) return (
     {!loadingRes && myReservations.length === 0 && (
       <div style={{ textAlign: "center", color: "#999", padding: 40 }}>No reservations yet</div>
     )}
+
     {!loadingRes && myReservations.map(res => (
-      <div key={res.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+  <div key={res.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{res.name}</div>
+        <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{res.email}</div>
+        <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>🎪 {res.booth_type}</div>
+        <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {res.event_name}</div>
+        {res.business_name && <div style={{ fontSize: 11, color: "#111", marginTop: 4, fontWeight: 600 }}>🏪 {res.business_name}</div>}
+        {res.business_type && <div style={{ fontSize: 11, color: Orange, marginTop: 2 }}>📦 {res.business_type}</div>}
+      </div>
+      <span style={{
+        padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+        background: res.status === "approved" ? "#E1F5EE" : res.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
+        color: res.status === "approved" ? "#085041" : res.status === "rejected" ? "#c62828" : "#633806"
+      }}>
+        {res.status === "approved" ? "Approved" : res.status === "rejected" ? "Rejected" : "Pending"}
+      </span>
+    </div>
+
+    {/* Approve/Reject */}
+    {res.status === "pending" && (
+      <div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <button
+            onClick={async () => {
+              const deadline = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+              await supabase.from("reservations").update({ status: "approved", payment_deadline: deadline }).eq("id", res.id);
+              await supabase.from("booths").update({ status: "reserved" }).eq("id", res.booth_id);
+              setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, status: "approved", payment_deadline: deadline } : r));
+            }}
+            style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+          >✓ Approve</button>
+          <button
+            onClick={() => setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, showRejectInput: true } : r))}
+            style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+          >✕ Reject</button>
+        </div>
+
+        {/* Rejection message input */}
+        {res.showRejectInput && (
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{res.name}</div>
-            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{res.email}</div>
-            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>🎪 {res.booth_type}</div>
-            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {res.event_name}</div>
-          </div>
-          <span style={{
-            padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-            background: res.status === "approved" ? "#E1F5EE" : res.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
-            color: res.status === "approved" ? "#085041" : res.status === "rejected" ? "#c62828" : "#633806"
-          }}>
-            {res.status === "approved" ? "Approved" : res.status === "rejected" ? "Rejected" : "Pending"}
-          </span>
-        </div>
-
-        {/* Payment status */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{
-            padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
-            background: res.payment_status === "paid" ? "#E1F5EE" : "#FEF3E2",
-            color: res.payment_status === "paid" ? "#085041" : "#633806"
-          }}>
-            💰 {res.payment_status === "paid" ? "Paid" : "Unpaid"}
-          </span>
-        </div>
-
-        {/* Approve/Reject buttons */}
-        {res.status === "pending" && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <input
+              placeholder="Reason for rejection..."
+              id={`reject-${res.id}`}
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 10, border: "1px solid #eee", fontSize: 12, outline: "none", boxSizing: "border-box", marginBottom: 6 }}
+            />
             <button
               onClick={async () => {
-                await supabase.from("reservations").update({ status: "approved" }).eq("id", res.id);
-                setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, status: "approved" } : r));
+                const msg = document.getElementById(`reject-${res.id}`).value;
+                await supabase.from("reservations").update({ status: "rejected", rejection_message: msg }).eq("id", res.id);
+                await supabase.from("booths").update({ status: "available" }).eq("id", res.booth_id);
+                setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, status: "rejected", rejection_message: msg } : r));
               }}
-              style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-            >
-              ✓ Approve
-            </button>
-            <button
-              onClick={async () => {
-                await supabase.from("reservations").update({ status: "rejected" }).eq("id", res.id);
-                setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, status: "rejected" } : r));
-              }}
-              style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-            >
-              ✕ Reject
-            </button>
-          </div>
-        )}
-
-        {/* Payment link - only show after approval */}
-        {res.status === "approved" && (
-          <div style={{ marginTop: 4 }}>
-            {res.payment_link ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 11, color: "#085041" }}>✅ Payment link sent</span>
-                <button
-                  onClick={async () => {
-                    await supabase.from("reservations").update({ payment_link: null }).eq("id", res.id);
-                    setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, payment_link: null } : r));
-                  }}
-                  style={{ fontSize: 10, color: "#999", background: "none", border: "none", cursor: "pointer" }}
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  placeholder="Paste payment link..."
-                  id={`payment-${res.id}`}
-                  style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: "1px solid #eee", fontSize: 12, outline: "none" }}
-                />
-                <button
-                  onClick={async () => {
-                    const link = document.getElementById(`payment-${res.id}`).value;
-                    if (!link) return;
-                    await supabase.from("reservations").update({ payment_link: link }).eq("id", res.id);
-                    setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, payment_link: link } : r));
-                  }}
-                  style={{ padding: "6px 12px", borderRadius: 8, border: "none", background: Orange, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                >
-                  Send
-                </button>
-              </div>
-            )}
+              style={{ width: "100%", padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >Send Rejection</button>
           </div>
         )}
       </div>
-    ))}
+    )}
+
+    {/* Payment link */}
+    {res.status === "approved" && (
+      <div style={{ marginTop: 4 }}>
+        {res.payment_link ? (
+          <div style={{ fontSize: 11, color: "#085041" }}>✅ Payment link sent</div>
+        ) : (
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              placeholder="Paste payment link..."
+              id={`payment-${res.id}`}
+              style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: "1px solid #eee", fontSize: 12, outline: "none" }}
+            />
+            <button
+              onClick={async () => {
+                const link = document.getElementById(`payment-${res.id}`).value;
+                if (!link) return;
+                await supabase.from("reservations").update({ payment_link: link }).eq("id", res.id);
+                setMyReservations(prev => prev.map(r => r.id === res.id ? { ...r, payment_link: link } : r));
+              }}
+              style={{ padding: "6px 12px", borderRadius: 8, border: "none", background: Orange, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >Send</button>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Show rejection message */}
+    {res.status === "rejected" && res.rejection_message && (
+      <div style={{ marginTop: 8, background: "#FFEBEE", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#c62828" }}>
+        💬 {res.rejection_message}
+      </div>
+    )}
+  </div>
+))}
   </div>
 )}
 
@@ -2280,8 +2569,48 @@ function BoothMapEditor({ event, onBack }) {
 }
 
 
+
+function PaymentTimer({ deadline }) {
+  const [timeLeft, setTimeLeft] = useState("");
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const end = new Date(deadline);
+      const diff = end - now;
+      if (diff <= 0) {
+        setExpired(true);
+        setTimeLeft("Expired");
+        clearInterval(timer);
+        return;
+      }
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(`${mins}:${secs.toString().padStart(2, "0")}`);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [deadline]);
+
+  return (
+    <div style={{
+      marginTop: 8, padding: "6px 12px", borderRadius: 10,
+      background: expired ? "#FFEBEE" : "#FEF3E2",
+      fontSize: 12, fontWeight: 700,
+      color: expired ? "#c62828" : "#633806"
+    }}>
+      {expired ? "⚠️ Payment time expired" : `⏳ Pay within: ${timeLeft}`}
+    </div>
+  );
+}
+
 function BoothMapViewer({ event, onClose, userEmail }) {
   //const isAr = lang === "ar";
+
+
+  const [businessName, setBusinessName] = useState("");
+const [businessType, setBusinessType] = useState("");
+
   const [booths, setBooths] = useState([]);
   const [selectedBooth, setSelectedBooth] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2303,32 +2632,33 @@ function BoothMapViewer({ event, onClose, userEmail }) {
     fetchBooths();
   }, [event.id]);
 
-  const handleReserveBooth = async () => {
-    if (!name || !email) return;
-    setReserving(true);
-    try {
-      // Save reservation
-      await supabase.from("reservations").insert([{
-        event_id: event.id,
-        event_name: event.name,
-        name,
-        email,
-        booth_type: `Booth ${selectedBooth.booth_number} (${selectedBooth.size || "Standard"})`,
-        status: "pending"
-      }]);
 
-      // Update booth status to reserved
-      await supabase.from("booths").update({ status: "reserved", reserved_by: email }).eq("id", selectedBooth.id);
-
-      // Update local state
-      setBooths(prev => prev.map(b => b.id === selectedBooth.id ? { ...b, status: "reserved" } : b));
-      setReserved(true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setReserving(false);
-    }
-  };
+const handleReserveBooth = async () => {
+  if (!name || !email || !businessName || !businessType) return;
+  setReserving(true);
+  try {
+    const deadline = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    await supabase.from("reservations").insert([{
+      event_id: event.id,
+      event_name: event.name,
+      name,
+      email,
+      booth_type: `Booth ${selectedBooth.booth_number} (${selectedBooth.size || "Standard"})`,
+      booth_id: selectedBooth.id,
+      business_name: businessName,
+      business_type: businessType,
+      status: "pending",
+      payment_deadline: deadline
+    }]);
+    await supabase.from("booths").update({ status: "pending" }).eq("id", selectedBooth.id);
+    setBooths(prev => prev.map(b => b.id === selectedBooth.id ? { ...b, status: "pending" } : b));
+    setReserved(true);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setReserving(false);
+  }
+};
 
   const inputStyle = {
     width: "100%", padding: "10px 14px", borderRadius: 12,
@@ -2337,19 +2667,23 @@ function BoothMapViewer({ event, onClose, userEmail }) {
   };
 
   if (reserved) return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
-      <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 32, width: "100%", maxWidth: 480, textAlign: "center" }}>
-        <div style={{ fontSize: 64 }}>🎉</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#111", marginTop: 12 }}>Booth Reserved!</div>
-        <div style={{ fontSize: 13, color: "#999", marginTop: 8, marginBottom: 24 }}>
-          Booth <strong>{selectedBooth.booth_number}</strong> has been reserved successfully!
-        </div>
-        <button onClick={onClose} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-          Done
-        </button>
+  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
+    <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 32, width: "100%", maxWidth: 480, textAlign: "center" }}>
+      <div style={{ fontSize: 64 }}>📤</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#111", marginTop: 12 }}>Request Submitted!</div>
+      <div style={{ fontSize: 13, color: "#999", marginTop: 8, marginBottom: 8 }}>
+        Your request for <strong>Booth {selectedBooth.booth_number}</strong> has been sent to the organizer.
       </div>
+      <div style={{ background: "#FEF3E2", borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#633806", marginBottom: 24 }}>
+        ⏳ The organizer will review your request. If approved you'll receive a payment link. Complete payment within 15 minutes to confirm your booth.
+      </div>
+      <button onClick={onClose} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+        Done
+      </button>
     </div>
-  );
+  </div>
+);
+
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#f8f8f8", zIndex: 100, overflowY: "auto" }}>
@@ -2431,12 +2765,45 @@ Available (color varies by type)
               </div>
             </div>
 
-            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Your Name</label>
-            <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="John Smith" value={name} onChange={e => setName(e.target.value)} />
+<label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Your Name</label>
+<input style={{ ...inputStyle, marginBottom: 10 }} placeholder="John Smith" value={name} onChange={e => setName(e.target.value)} />
 
-            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Your Email</label>
-            <input style={{ ...inputStyle, marginBottom: 16 }} placeholder="john@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
+<label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Your Email</label>
+<input style={{ ...inputStyle, marginBottom: 10 }} placeholder="john@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
 
+<label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Business Name</label>
+<input style={{ ...inputStyle, marginBottom: 10 }} placeholder="e.g. Burger House" value={businessName} onChange={e => setBusinessName(e.target.value)} />
+
+<label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>Business Type</label>
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+  {["Food", "Clothing", "Games", "Electronics", "Beauty", "Art", "Other"].map(type => (
+    <button
+      key={type}
+      onClick={() => setBusinessType(type)}
+      style={{
+        padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer",
+        background: businessType === type ? Orange : "#f0f0f0",
+        color: businessType === type ? "#fff" : "#666",
+        fontSize: 12, fontWeight: businessType === type ? 700 : 400
+      }}
+    >
+      {type}
+    </button>
+  ))}
+</div>
+
+<button
+  onClick={handleReserveBooth}
+  disabled={reserving || !name || !email || !businessName || !businessType}
+  style={{
+    width: "100%", padding: 14, borderRadius: 16, border: "none",
+    background: reserving || !name || !email || !businessName || !businessType ? "#ccc" : Orange,
+    color: "#fff", fontSize: 15, fontWeight: 700,
+    cursor: reserving || !name || !email || !businessName || !businessType ? "not-allowed" : "pointer"
+  }}
+>
+  {reserving ? "Submitting..." : `📤 Submit Request for Booth ${selectedBooth.booth_number}`}
+</button>
             <button
               onClick={handleReserveBooth}
               disabled={reserving || !name || !email}
