@@ -438,6 +438,29 @@ function EventDetail({ event, onBack, lang, userEmail, userId }) {
   const [isAttending, setIsAttending] = useState(false);
 const [attendees, setAttendees] = useState([]);
 
+const [eventImages, setEventImages] = useState([]);
+const [activeImage, setActiveImage] = useState(0);
+
+
+
+useEffect(() => {
+  const fetchImages = async () => {
+    const { data } = await supabase
+      .from("event_images")
+      .select("*")
+      .eq("event_id", event.id)
+      .order("sort_order", { ascending: true });
+    if (data && data.length > 0) {
+      setEventImages(data.map(img => img.image_url));
+    } else if (event.image_url) {
+      setEventImages([event.image_url]);
+    }
+  };
+  fetchImages();
+}, [event.id]);
+
+
+
 useEffect(() => {
   const fetchAttendees = async () => {
     const { data } = await supabase
@@ -458,16 +481,55 @@ useEffect(() => {
         <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#111" }}>{isAr ? "→" : "←"}</button>
         <span style={{ fontWeight: 700, fontSize: 16, color: "#111" }}>{event.name}</span>
       </div>
-      <div style={{ background: `${Orange}22`, height: 200, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
-  {event.image_url ? (
-    <img src={event.image_url} alt={event.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+  
+  
+
+  <div style={{ background: `${Orange}22`, height: 200, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+  {eventImages.length > 0 ? (
+    <img src={eventImages[activeImage]} alt={event.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
   ) : (
     <span style={{ fontSize: 72 }}>🎉</span>
+  )}
+  {/* Image counter */}
+  {eventImages.length > 1 && (
+    <div style={{ position: "absolute", bottom: 10, right: 10, background: "rgba(0,0,0,0.5)", color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 11 }}>
+      {activeImage + 1} / {eventImages.length}
+    </div>
+  )}
+  {/* Dot indicators */}
+  {eventImages.length > 1 && (
+    <div style={{ position: "absolute", bottom: 10, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4 }}>
+      {eventImages.map((_, i) => (
+        <div key={i} onClick={() => setActiveImage(i)} style={{ width: 6, height: 6, borderRadius: "50%", background: i === activeImage ? "#fff" : "rgba(255,255,255,0.5)", cursor: "pointer" }} />
+      ))}
+      
+    </div>
   )}
         <div style={{ position: "absolute", top: 12, right: isAr ? "auto" : 12, left: isAr ? 12 : "auto", background: Orange, color: "#fff", borderRadius: 8, padding: "4px 14px", fontSize: 13, fontWeight: 700 }}>
           {event.price}
         </div>
       </div>
+
+
+{/* ← ADD THUMBNAIL STRIP RIGHT HERE */}
+{eventImages.length > 1 && (
+  <div style={{ background: "#fff", padding: "8px 12px", display: "flex", gap: 6, borderBottom: "1px solid #eee", overflowX: "auto" }}>
+    {eventImages.map((img, i) => (
+      <div
+        key={i}
+        onClick={() => setActiveImage(i)}
+        style={{
+          width: 48, height: 48, borderRadius: 8, overflow: "hidden", flexShrink: 0,
+          border: i === activeImage ? `2px solid ${Orange}` : "2px solid transparent",
+          cursor: "pointer"
+        }}
+      >
+        <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      </div>
+    ))}
+  </div>
+)}
+      
       <div style={{ padding: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#111", margin: "0 0 6px" }}>{event.name}</h2>
         <a href={`https://www.google.com/maps/search/?api=1&query=${event.lat},${event.lng}`}
@@ -606,14 +668,16 @@ useEffect(() => {
 
 }
 
-function AdminScreen({ onBack, lang, onEventPublished, user }) {
+function AdminScreen({ onBack, lang, onEventPublished,  onEventDeleted, user }) {
 
 
 
-  const [floorMapUrl, setFloorMapUrl] = useState("");
+  const [showBoothMap, setShowBoothMap] = useState(false);
+const [publishedEvent, setPublishedEvent] = useState(null);
   const [myEvents, setMyEvents] = useState([]);
 const [loadingEvents, setLoadingEvents] = useState(false);
-  const [imageUrl, setImageUrl] = useState("");
+ //const [imageUrl, setImageUrl] = useState("");
+const [floorMapUrl, setFloorMapUrl] = useState("");
   const t = translations[lang];
   const isAr = lang === "ar";
   const [activeTab, setActiveTab] = useState("create");
@@ -641,7 +705,7 @@ const [lng, setLng] = useState(47.9774);
 
   const [editingEvent, setEditingEvent] = useState(null);
 
-
+const [eventImages, setEventImages] = useState([]);
 
 
 
@@ -649,11 +713,27 @@ useEffect(() => {
   if (activeTab !== "events") return;
   const fetchMyEvents = async () => {
     setLoadingEvents(true);
-    const { data } = await supabase
+ const { data: eventsData } = await supabase
   .from("events")
   .select("*")
   .order("id", { ascending: false });
-    setMyEvents(data || []);
+
+// Fetch organizer names
+const eventsWithOrganizers = await Promise.all(
+  (eventsData || []).map(async (event) => {
+    if (event.organizer_id) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("name, email")
+        .eq("id", event.organizer_id)
+        .single();
+      return { ...event, organizerName: userData?.name || userData?.email || "Admin" };
+    }
+    return { ...event, organizerName: "Admin" };
+  })
+);
+setMyEvents(eventsWithOrganizers);
+  
     setLoadingEvents(false);
   };
   fetchMyEvents();
@@ -723,6 +803,7 @@ useEffect(() => {
     const { error } = await supabase.from("events").delete().eq("id", eventId);
     if (error) throw error;
     setMyEvents(prev => prev.filter(e => e.id !== eventId));
+    if (onEventDeleted) onEventDeleted(eventId);
     alert("✅ Event deleted successfully!");
   } catch (err) {
     console.error(err);
@@ -745,7 +826,7 @@ useEffect(() => {
     setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: imageUrl, floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
+        name: eventName, category: selectedCat, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -755,6 +836,17 @@ useEffect(() => {
       const { data, error: sbError } = await supabase.from("events").insert([newEvent]).select();
       if (sbError) throw sbError;
       onEventPublished(data[0]);
+      // Save all images to event_images table
+if (eventImages.length > 0) {
+  const imageRows = eventImages.map((url, i) => ({
+    event_id: data[0].id,
+    image_url: url,
+    is_cover: i === 0,
+    sort_order: i
+  }));
+  await supabase.from("event_images").insert(imageRows);
+}
+      setPublishedEvent(data[0]);
       setPublished(true);
     } catch (err) {
       console.error(err);
@@ -763,6 +855,26 @@ useEffect(() => {
       setIsPublishing(false);
     }
   };
+
+
+if (showBoothMap && publishedEvent) return (
+  <BoothMapEditor event={publishedEvent} onBack={() => setShowBoothMap(false)} />
+);
+
+if (published) return (
+  <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, padding: 20 }}>
+    <span style={{ fontSize: 72 }}>🎉</span>
+    <div style={{ fontSize: 24, fontWeight: 700, color: "#111" }}>{t.published}</div>
+    <button onClick={onBack} style={{ marginTop: 16, width: "100%", padding: "12px 32px", borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{t.backHome}</button>
+    <button
+      onClick={() => setShowBoothMap(true)}
+      style={{ width: "100%", padding: 14, borderRadius: 16, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 15, fontWeight: 700, cursor: "pointer" }}
+    >
+      🗺️ Set Up Booth Map
+    </button>
+  </div>
+);
+
 
   if (published) return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
@@ -775,12 +887,14 @@ useEffect(() => {
     </div>
   );
 
+
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "Arial, sans-serif" : "sans-serif" }}>
       <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #eee" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>{isAr ? "→" : "←"}</button>
         <span style={{ fontWeight: 700, fontSize: 18 }}>{isAr ? "الإدارة" : "Admin Dashboard"}</span>
       </div>
+
 
       {/* Admin tabs */}
       <div style={{ background: "#fff", display: "flex", borderBottom: "1px solid #eee" }}>
@@ -798,6 +912,7 @@ useEffect(() => {
           </button>
         ))}
       </div>
+
 
       {activeTab === "create" && (
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -818,9 +933,57 @@ useEffect(() => {
 
 
 
+{/* Multi-image upload */}
 <div>
-  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Event Image (optional)</label>
- <div>
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+    <label style={{ fontSize: 12, color: "#999" }}>Event Images (up to 10)</label>
+    <span style={{ fontSize: 10, color: Orange }}>{eventImages.length}/10 uploaded</span>
+  </div>
+  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+    {eventImages.map((img, i) => (
+      <div key={i} style={{ position: "relative", height: 72, borderRadius: 8, overflow: "hidden", border: i === 0 ? `2px solid ${Orange}` : "0.5px solid #eee" }}>
+        <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        {i === 0 && (
+          <div style={{ position: "absolute", bottom: 3, left: 3, background: Orange, borderRadius: 4, padding: "1px 5px", fontSize: 9, color: "#fff" }}>Cover</div>
+        )}
+        <button
+          onClick={() => setEventImages(prev => prev.filter((_, idx) => idx !== i))}
+          style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >✕</button>
+      </div>
+    ))}
+    {eventImages.length < 10 && (
+      <label style={{ height: 72, borderRadius: 8, border: "1px dashed #ddd", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", background: "#f8f8f8" }}>
+        <span style={{ fontSize: 20, color: Orange }}>+</span>
+        <span style={{ fontSize: 10, color: "#999" }}>Add photo</span>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+              if (eventImages.length >= 10) break;
+              const fileExt = file.name.split(".").pop();
+              const fileName = `${Math.random()}.${fileExt}`;
+              const { error: uploadError } = await supabase.storage
+                .from("event-image").upload(fileName, file);
+              if (uploadError) { console.error(uploadError); continue; }
+              const { data: urlData } = supabase.storage
+                .from("event-image").getPublicUrl(fileName);
+              setEventImages(prev => [...prev, urlData.publicUrl]);
+            }
+          }}
+          style={{ display: "none" }}
+        />
+      </label>
+    )}
+  </div>
+  <div style={{ fontSize: 10, color: "#999", marginTop: 6 }}>First image is the cover shown on event cards</div>
+</div>
+
+{/* Floor Map */}
+<div>
   <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Floor Map (optional)</label>
   <input
     type="file"
@@ -843,32 +1006,6 @@ useEffect(() => {
   />
   {floorMapUrl && (
     <img src={floorMapUrl} alt="floor map preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
-  )}
-</div>
- <input
-    type="file"
-    accept="image/*"
-    onChange={async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-     const { error: uploadError } = await supabase.storage
-  .from("event-image")
-  .upload(fileName, file);
-    if (uploadError) {
-  console.error(uploadError);
-  return;
-}
-      const { data: urlData } = supabase.storage
-        .from("event-image")
-        .getPublicUrl(fileName);
-      setImageUrl(urlData.publicUrl);
-    }}
-    style={{ width: "100%", padding: "10px 0", fontSize: 13, color: "#999", cursor: "pointer" }}
-  />
-  {imageUrl && (
-    <img src={imageUrl} alt="preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
   )}
 </div>
 
@@ -1074,7 +1211,7 @@ useEffect(() => {
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
 <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
 <div style={{ fontSize: 11, color: "#6B21A8", marginTop: 2 }}>
-  👤 {event.users?.name || event.users?.email || "Admin"}
+  👤 {event.organizerName}
 </div>
             <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
             <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
@@ -1842,8 +1979,10 @@ const handleOrganizerRequest = async () => {
   );
 }
 
-function OrganizerScreen({ onBack, lang, onEventPublished, userProfile, user }) {
+function OrganizerScreen({ onBack, lang, onEventPublished, userProfile, onEventDeleted,  user }) {
 
+
+  const [eventImages, setEventImages] = useState([]);
 
   const [floorMapUrl, setFloorMapUrl] = useState("");
   const [myEvents, setMyEvents] = useState([]);
@@ -1853,7 +1992,7 @@ const [loadingEvents, setLoadingEvents] = useState(false);
 const [lat, setLat] = useState(29.3759);
 const [lng, setLng] = useState(47.9774);
 
- const [imageUrl, setImageUrl] = useState("");
+ //const [imageUrl, setImageUrl] = useState("");
   const t = translations[lang];
   const isAr = lang === "ar";
   const [eventName, setEventName] = useState("");
@@ -1929,7 +2068,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
     setIsPublishing(true); setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: imageUrl,  floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
+        name: eventName, category: selectedCat, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -1939,6 +2078,16 @@ const [publishedEvent, setPublishedEvent] = useState(null);
       const { data, error: sbError } = await supabase.from("events").insert([newEvent]).select();
       if (sbError) throw sbError;
       onEventPublished(data[0]);
+      // Save all images to event_images table
+if (eventImages.length > 0) {
+  const imageRows = eventImages.map((url, i) => ({
+    event_id: data[0].id,
+    image_url: url,
+    is_cover: i === 0,
+    sort_order: i
+  }));
+  await supabase.from("event_images").insert(imageRows);
+}
       setPublishedEvent(data[0]);
 setPublished(true);
 console.log("published!", data[0]);
@@ -1957,6 +2106,7 @@ console.log("published!", data[0]);
     const { error } = await supabase.from("events").delete().eq("id", eventId);
     if (error) throw error;
     setMyEvents(prev => prev.filter(e => e.id !== eventId));
+    if (onEventDeleted) onEventDeleted(eventId);
     alert("✅ Event deleted successfully!");
   } catch (err) {
     console.error(err);
@@ -2081,31 +2231,53 @@ if (published) return (
           </div>
 
 
-{/* Event Image */}
+{/* Multi-image upload */}
 <div>
-  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Event Image (optional)</label>
-  <input
-    type="file"
-    accept="image/*"
-    onChange={async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("event-image")
-        .upload(fileName, file);
-      if (uploadError) { console.error(uploadError); return; }
-      const { data: urlData } = supabase.storage
-        .from("event-image")
-        .getPublicUrl(fileName);
-      setImageUrl(urlData.publicUrl);
-    }}
-    style={{ width: "100%", padding: "10px 0", fontSize: 13, color: "#999", cursor: "pointer" }}
-  />
-  {imageUrl && (
-    <img src={imageUrl} alt="preview" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 12, marginTop: 8 }} />
-  )}
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+    <label style={{ fontSize: 12, color: "#999" }}>Event Images (up to 10)</label>
+    <span style={{ fontSize: 10, color: Orange }}>{eventImages.length}/10 uploaded</span>
+  </div>
+  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+    {eventImages.map((img, i) => (
+      <div key={i} style={{ position: "relative", height: 72, borderRadius: 8, overflow: "hidden", border: i === 0 ? `2px solid ${Orange}` : "0.5px solid #eee" }}>
+        <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        {i === 0 && (
+          <div style={{ position: "absolute", bottom: 3, left: 3, background: Orange, borderRadius: 4, padding: "1px 5px", fontSize: 9, color: "#fff" }}>Cover</div>
+        )}
+        <button
+          onClick={() => setEventImages(prev => prev.filter((_, idx) => idx !== i))}
+          style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >✕</button>
+      </div>
+    ))}
+    {eventImages.length < 10 && (
+      <label style={{ height: 72, borderRadius: 8, border: "1px dashed #ddd", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", background: "#f8f8f8" }}>
+        <span style={{ fontSize: 20, color: Orange }}>+</span>
+        <span style={{ fontSize: 10, color: "#999" }}>Add photo</span>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+              if (eventImages.length >= 10) break;
+              const fileExt = file.name.split(".").pop();
+              const fileName = `${Math.random()}.${fileExt}`;
+              const { error: uploadError } = await supabase.storage
+                .from("event-image").upload(fileName, file);
+              if (uploadError) { console.error(uploadError); continue; }
+              const { data: urlData } = supabase.storage
+                .from("event-image").getPublicUrl(fileName);
+              setEventImages(prev => [...prev, urlData.publicUrl]);
+            }
+          }}
+          style={{ display: "none" }}
+        />
+      </label>
+    )}
+  </div>
+  <div style={{ fontSize: 10, color: "#999", marginTop: 6 }}>First image is the cover shown on event cards</div>
 </div>
 
 {/* Floor Map */}
@@ -3085,8 +3257,8 @@ useEffect(() => {
 
 if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "visitor") setIsVisitor(true); }} lang={lang} />;
   if (selectedEvent) return <EventDetail event={selectedEvent} onBack={() => setSelectedEvent(null)} lang={lang} userEmail={user?.email} userId={user?.id} />;
-  if (showAdmin) return <AdminScreen onBack={() => setShowAdmin(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); setShowAdmin(false); }} user={user} />;
-  if (showOrganizer) return <OrganizerScreen onBack={() => setShowOrganizer(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} user={user} userProfile={userProfile} />;
+  if (showAdmin) return <AdminScreen onBack={() => setShowAdmin(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} onEventDeleted={(id) => setEvents(prev => prev.filter(e => e.id !== id))} user={user} />;
+  if (showOrganizer) return <OrganizerScreen onBack={() => setShowOrganizer(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} onEventDeleted={(id) => setEvents(prev => prev.filter(e => e.id !== id))} user={user} userProfile={userProfile} />;
   if (showProfile) return (
   <ProfileScreen
     user={user}
