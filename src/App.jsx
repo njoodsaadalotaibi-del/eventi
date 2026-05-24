@@ -1087,7 +1087,10 @@ const [resetLoading, setResetLoading] = useState(false);
   } else {
     setError(err.message);
   }
+} finally {
+  setLoading(false);
 }
+  };
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", padding: 24, background: "#f8f8f8", direction: isAr ? "rtl" : "ltr" }}>
@@ -2477,6 +2480,8 @@ function VisitorProfile({ onClose, lang, visitorInfo, onSave, onLoginClick }) {
 
 
 export default function App() {
+
+
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -2492,22 +2497,27 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isVisitor, setIsVisitor] = useState(false);
   const [visitorInfo, setVisitorInfo] = useState({ name: "", email: "", avatar_url: null });
-const [showVisitorProfile, setShowVisitorProfile] = useState(false);
+const [showVisitorProfile, setShowVisitorProfile] = useState(false);  const [showPasswordReset, setShowPasswordReset] = useState(false);
+const [newPassword, setNewPassword] = useState("");
+const [passwordResetDone, setPasswordResetDone] = useState(false);
 
 
   const t = translations[lang];
   const isAr = lang === "ar";
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
-      setAuthLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+ useEffect(() => {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    setUser(session?.user || null);
+    setAuthLoading(false);
+  });
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    setUser(session?.user || null);
+    if (event === "PASSWORD_RECOVERY") {
+      setShowPasswordReset(true);
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
 
   useEffect(() => {
     if (!user) return;
@@ -2541,6 +2551,41 @@ const [showVisitorProfile, setShowVisitorProfile] = useState(false);
 
   const filteredEvents = selectedCategory === "All"
     ? events : events.filter(e => e.category === selectedCategory);
+
+    if (showPasswordReset) return (
+  <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", padding: 24, background: "#f8f8f8" }}>
+    <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
+    <div style={{ fontSize: 22, fontWeight: 700, color: "#111", marginBottom: 8 }}>Set New Password</div>
+    <div style={{ fontSize: 13, color: "#999", marginBottom: 24 }}>Enter your new password below</div>
+    {passwordResetDone ? (
+      <div style={{ background: "#E1F5EE", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#085041", textAlign: "center", width: "100%" }}>
+        ✅ Password updated successfully! You are now logged in.
+      </div>
+    ) : (
+      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+        <input
+          type="password"
+          placeholder="New password (min 6 characters)"
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+          style={{ width: "100%", padding: "12px 16px", borderRadius: 14, border: "1px solid #eee", background: "#f8f8f8", fontSize: 14, outline: "none", boxSizing: "border-box" }}
+        />
+        <button
+          onClick={async () => {
+            if (newPassword.length < 6) { alert("Password must be at least 6 characters"); return; }
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) { alert(error.message); return; }
+            setPasswordResetDone(true);
+            setTimeout(() => setShowPasswordReset(false), 2000);
+          }}
+          style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}
+        >
+          Update Password
+        </button>
+      </div>
+    )}
+  </div>
+);
 
   if (authLoading) return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
