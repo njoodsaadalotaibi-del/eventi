@@ -649,13 +649,27 @@ useEffect(() => {
 
   //send organizer request
 
-  const updateOrganizerRequest = async (req, status) => {
-    await supabase.from("organizer_requests").update({ status }).eq("id", req.id);
+ const updateOrganizerRequest = async (req, status) => {
+  try {
+    const { error: reqError } = await supabase
+      .from("organizer_requests").update({ status }).eq("id", req.id);
+    if (reqError) { console.error("Request update error:", reqError); return; }
+    
     if (status === "approved") {
-      await supabase.from("users").update({ role: "organizer" }).eq("id", req.user_id);
+      const { error: userError } = await supabase
+        .from("users").update({ role: "organizer" }).eq("id", req.user_id);
+      if (userError) { 
+        console.error("User role update error:", userError); 
+        alert("Failed to update user role: " + userError.message);
+        return; 
+      }
+      alert("✅ Organizer approved successfully!");
     }
     setOrgRequests(prev => prev.map(r => r.id === req.id ? { ...r, status } : r));
-  };
+  } catch (err) {
+    console.error(err);
+  }
+};
 
 
   const handleDeleteEvent = async (eventId) => {
@@ -1345,6 +1359,17 @@ const handleOrganizerRequest = async () => {
             }}>
               {userProfile?.role === "admin" ? "👑 Admin" : userProfile?.role === "organizer" ? "🎪 Organizer" : "🎉 Consumer"}
             </span>
+
+            <button
+  onClick={async () => {
+    const { data } = await supabase
+      .from("users").select("*").eq("id", user.id).single();
+    if (onProfileUpdate) onProfileUpdate(data);
+  }}
+  style={{ marginTop: 8, background: "none", border: "none", color: "#999", fontSize: 11, cursor: "pointer", display: "block", margin: "8px auto 0" }}
+>
+  🔄 Refresh
+</button>
           </div>
         </div>
 
@@ -2599,11 +2624,18 @@ useEffect(() => {
   return () => subscription.unsubscribe();
 }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("users").select("*").eq("id", user.id).single()
-      .then(({ data }) => setUserProfile(data));
-  }, [user]);
+ useEffect(() => {
+  if (!user) return;
+  const fetchProfile = async () => {
+    const { data } = await supabase
+      .from("users").select("*").eq("id", user.id).single();
+    setUserProfile(data);
+  };
+  fetchProfile();
+  // Refresh every 30 seconds to catch role changes
+  const interval = setInterval(fetchProfile, 30000);
+  return () => clearInterval(interval);
+}, [user]);
 
   useEffect(() => {
     const fetchEvents = async () => {
