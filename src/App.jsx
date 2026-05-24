@@ -977,27 +977,34 @@ useEffect(() => {
     )}
     {!loadingOrg && orgRequests.map(req => (
       <div key={req.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{req.name}</div>
-            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{req.email}</div>
-            <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>{req.reason}</div>
-          </div>
-          <span style={{
-            padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-            background: req.status === "approved" ? "#E1F5EE" : req.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
-            color: req.status === "approved" ? "#085041" : req.status === "rejected" ? "#c62828" : "#633806"
-          }}>
-            {req.status === "approved" ? t.approved : req.status === "rejected" ? t.rejected : t.pending}
-          </span>
-        </div>
-        {req.status === "pending" && (
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button onClick={() => updateOrganizerRequest(req, "approved")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✓ {t.approve}</button>
-            <button onClick={() => updateOrganizerRequest(req, "rejected")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕ {t.reject}</button>
-          </div>
-        )}
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div style={{ flex: 1 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{req.name}</div>
+      <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{req.email}</div>
+      {req.company_name && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>🏢 {req.company_name}</div>}
+      {req.event_type && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>🎪 {req.event_type}</div>}
+      {req.phone && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>📞 {req.phone}</div>}
+      {req.instagram && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>📸 {req.instagram}</div>}
+      {req.reason && <div style={{ fontSize: 11, color: "#666", marginTop: 4, fontStyle: "italic" }}>"{req.reason}"</div>}
+      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+        {req.has_organized_before ? "✓ Has organized before" : "✗ First time organizer"}
       </div>
+    </div>
+    <span style={{
+      padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+      background: req.status === "approved" ? "#E1F5EE" : req.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
+      color: req.status === "approved" ? "#085041" : req.status === "rejected" ? "#c62828" : "#633806"
+    }}>
+      {req.status === "approved" ? t.approved : req.status === "rejected" ? t.rejected : t.pending}
+    </span>
+  </div>
+  {req.status === "pending" && (
+    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+      <button onClick={() => updateOrganizerRequest(req, "approved")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✓ {t.approve}</button>
+      <button onClick={() => updateOrganizerRequest(req, "rejected")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕ {t.reject}</button>
+    </div>
+  )}
+</div>
     ))}
   </div>
 )}
@@ -1077,19 +1084,21 @@ const [resetLoading, setResetLoading] = useState(false);
       }
       onAuth();
    } catch (err) {
-  console.error(err);
-  if (err.message.includes("Invalid login credentials")) {
-    setError("Incorrect email or password. Please try again.");
-  } else if (err.message.includes("Email not confirmed")) {
-    setError("Please confirm your email first. Check your inbox.");
-  } else if (err.message.includes("Too many requests")) {
-    setError("Too many attempts. Please wait a few minutes and try again.");
-  } else {
-    setError(err.message);
-  }
-} finally {
-  setLoading(false);
-}
+      console.error(err);
+      if (err.message.includes("Invalid login credentials")) {
+        setError("❌ Wrong email or password. Please check and try again.");
+      } else if (err.message.includes("Email not confirmed")) {
+        setError("📧 Please confirm your email first. Check your inbox.");
+      } else if (err.message.includes("Too many requests")) {
+        setError("⏳ Too many attempts. Please wait a few minutes.");
+      } else if (err.message.includes("User not found")) {
+        setError("❌ No account found with this email. Please sign up.");
+      } else {
+        setError("❌ " + err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1207,12 +1216,13 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
   const [myEvents, setMyEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showOrganizerForm, setShowOrganizerForm] = useState(false);
-  const [reason, setReason] = useState("");
+  
   const [requestSent, setRequestSent] = useState(false);
   const [requestStatus, setRequestStatus] = useState(null);
   const [activeTab, setActiveTab] = useState("reservations");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatar_url || null);
+  const [orgForm, setOrgForm] = useState({ company_name: "", event_type: "", phone: "", contact_email: user.email, instagram: "", reason: "", has_organized_before: false });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -1263,19 +1273,29 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
     }
   };
 
-  const handleOrganizerRequest = async () => {
-    if (!reason) return;
-    try {
-      await supabase.from("organizer_requests").insert([{
-        user_id: user.id, email: user.email,
-        name: userProfile?.name || user.email,
-        reason, status: "pending"
-      }]);
-      setRequestSent(true);
-      setRequestStatus("pending");
-      setShowOrganizerForm(false);
-    } catch (err) { console.error(err); }
-  };
+const handleOrganizerRequest = async () => {
+  if (!orgForm.company_name || !orgForm.phone) { 
+    alert("Please fill in company name and phone number");
+    return; 
+  }
+  try {
+    await supabase.from("organizer_requests").insert([{
+      user_id: user.id,
+      email: user.email,
+      name: userProfile?.name || user.email,
+      company_name: orgForm.company_name,
+      event_type: orgForm.event_type,
+      phone: orgForm.phone,
+      instagram: orgForm.instagram,
+      reason: orgForm.reason,
+      has_organized_before: orgForm.has_organized_before,
+      status: "pending"
+    }]);
+    setRequestSent(true);
+    setRequestStatus("pending");
+    setShowOrganizerForm(false);
+  } catch (err) { console.error(err); }
+};
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr" }}>
@@ -1328,30 +1348,79 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
           </div>
         </div>
 
-        {/* Become organizer section */}
-        {userProfile?.role === "consumer" && (
-          <div style={{ background: "#fff", borderRadius: 20, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-            {requestStatus === "pending" && <div style={{ textAlign: "center", color: "#633806", fontSize: 13 }}>⏳ {t.organizerStatus}</div>}
-            {requestStatus === "approved" && <div style={{ textAlign: "center", color: "#085041", fontSize: 13 }}>✅ {t.youAreOrganizer}</div>}
-            {!requestStatus && !showOrganizerForm && (
-              <button onClick={() => setShowOrganizerForm(true)} style={{ width: "100%", padding: 12, borderRadius: 14, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                🎪 {t.becomeOrganizer}
-              </button>
-            )}
-            {showOrganizerForm && (
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 8 }}>{t.organizerRequest}</div>
-                <textarea placeholder={t.requestReason} value={reason} onChange={e => setReason(e.target.value)}
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", minHeight: 80, resize: "vertical" }} />
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button onClick={handleOrganizerRequest} style={{ flex: 1, padding: 10, borderRadius: 12, border: "none", background: Orange, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Send</button>
-                  <button onClick={() => setShowOrganizerForm(false)} style={{ flex: 1, padding: 10, borderRadius: 12, border: "1px solid #eee", background: "#fff", color: "#999", fontSize: 13, cursor: "pointer" }}>{t.cancel}</button>
-                </div>
-              </div>
-            )}
-            {requestSent && <div style={{ textAlign: "center", color: "#085041", fontSize: 13, marginTop: 8 }}>✅ {t.requestSent}</div>}
+       {/* Become organizer section */}
+{userProfile?.role === "consumer" && !userProfile?.dismissed_organizer && (
+  <div style={{ background: "#fff", borderRadius: 20, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+    {requestStatus === "pending" && (
+      <div style={{ textAlign: "center", color: "#633806", fontSize: 13 }}>⏳ {t.organizerStatus}</div>
+    )}
+    {requestStatus === "approved" && (
+      <div style={{ textAlign: "center", color: "#085041", fontSize: 13 }}>✅ {t.youAreOrganizer}</div>
+    )}
+    {!requestStatus && !showOrganizerForm && (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button onClick={() => setShowOrganizerForm(true)} style={{ flex: 1, padding: 12, borderRadius: 14, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          🎪 {t.becomeOrganizer}
+        </button>
+        <button
+          onClick={async () => {
+            await supabase.from("users").update({ dismissed_organizer: true }).eq("id", user.id);
+            if (onProfileUpdate) onProfileUpdate({ ...userProfile, dismissed_organizer: true });
+          }}
+          style={{ marginLeft: 8, width: 32, height: 32, borderRadius: "50%", border: "1px solid #eee", background: "#fff", color: "#999", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >✕</button>
+      </div>
+    )}
+    {showOrganizerForm && (
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#111", marginBottom: 16 }}>🎪 Organizer Application</div>
+        
+        {[
+          { label: "Company / Brand Name", key: "company_name", placeholder: "e.g. Events Co." },
+          { label: "Type of Events", key: "event_type", placeholder: "e.g. Food festivals, Music events" },
+          { label: "Contact Number", key: "phone", placeholder: "e.g. +965 XXXX XXXX" },
+          { label: "Email", key: "contact_email", placeholder: "company@email.com" },
+          { label: "Instagram Account", key: "instagram", placeholder: "@yourhandle" },
+          { label: "Short Description", key: "reason", placeholder: "Tell us about your company..." },
+        ].map(field => (
+          <div key={field.key} style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{field.label}</label>
+            <input
+              placeholder={field.placeholder}
+              value={orgForm[field.key] || ""}
+              onChange={e => setOrgForm(p => ({ ...p, [field.key]: e.target.value }))}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+            />
           </div>
-        )}
+        ))}
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>Have you organized events before?</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setOrgForm(p => ({ ...p, has_organized_before: true }))}
+              style={{ flex: 1, padding: 10, borderRadius: 12, border: "none", background: orgForm.has_organized_before ? "#E1F5EE" : "#f8f8f8", color: orgForm.has_organized_before ? "#085041" : "#999", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >✓ Yes</button>
+            <button
+              onClick={() => setOrgForm(p => ({ ...p, has_organized_before: false }))}
+              style={{ flex: 1, padding: 10, borderRadius: 12, border: "none", background: orgForm.has_organized_before === false ? "#FFEBEE" : "#f8f8f8", color: orgForm.has_organized_before === false ? "#c62828" : "#999", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >✕ No</button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={handleOrganizerRequest} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: Orange, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            📤 Submit Application
+          </button>
+          <button onClick={() => setShowOrganizerForm(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #eee", background: "#fff", color: "#999", fontSize: 13, cursor: "pointer" }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )}
+    {requestSent && <div style={{ textAlign: "center", color: "#085041", fontSize: 13, marginTop: 8 }}>✅ Application submitted! We'll review it shortly.</div>}
+  </div>
+)}
 
        {/* Tabs */}
         <div style={{ background: "#fff", borderRadius: 14, display: "flex", marginBottom: 16, overflow: "hidden" }}>
@@ -1492,12 +1561,13 @@ const [publishedEvent, setPublishedEvent] = useState(null);
     const { data } = await supabase
       .from("events")
       .select("*")
+      .eq("organizer_id", user?.id)
       .order("id", { ascending: false });
     setMyEvents(data || []);
     setLoadingEvents(false);
   };
   fetchMyEvents();
-}, [activeTab]);
+}, [activeTab, user]);
 
  useEffect(() => {
   if (activeTab !== "reservations") return;
@@ -2482,6 +2552,8 @@ function VisitorProfile({ onClose, lang, visitorInfo, onSave, onLoginClick }) {
 export default function App() {
 
 
+
+
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -2497,19 +2569,27 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isVisitor, setIsVisitor] = useState(false);
   const [visitorInfo, setVisitorInfo] = useState({ name: "", email: "", avatar_url: null });
-const [showVisitorProfile, setShowVisitorProfile] = useState(false);  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [showVisitorProfile, setShowVisitorProfile] = useState(false);
+const [showPasswordReset, setShowPasswordReset] = useState(false);
 const [newPassword, setNewPassword] = useState("");
 const [passwordResetDone, setPasswordResetDone] = useState(false);
-
 
   const t = translations[lang];
   const isAr = lang === "ar";
 
- useEffect(() => {
+useEffect(() => {
+  // Check for password reset token in URL
+  const hashParams = new URLSearchParams(window.location.hash.replace("#", "?"));
+  const type = hashParams.get("type");
+  if (type === "recovery") {
+    setTimeout(() => setShowPasswordReset(true), 0);
+  }
+
   supabase.auth.getSession().then(({ data: { session } }) => {
     setUser(session?.user || null);
     setAuthLoading(false);
   });
+
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
     setUser(session?.user || null);
     if (event === "PASSWORD_RECOVERY") {
@@ -2572,12 +2652,21 @@ const [passwordResetDone, setPasswordResetDone] = useState(false);
         />
         <button
           onClick={async () => {
-            if (newPassword.length < 6) { alert("Password must be at least 6 characters"); return; }
-            const { error } = await supabase.auth.updateUser({ password: newPassword });
-            if (error) { alert(error.message); return; }
-            setPasswordResetDone(true);
-            setTimeout(() => setShowPasswordReset(false), 2000);
-          }}
+  if (newPassword.length < 6) { alert("Password must be at least 6 characters"); return; }
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    setPasswordResetDone(true);
+    // Clear URL hash
+    window.history.replaceState(null, "", window.location.pathname);
+    setTimeout(() => {
+      setShowPasswordReset(false);
+      setNewPassword("");
+    }, 2000);
+  } catch (err) {
+    alert("Failed to reset password: " + err.message);
+  }
+}}
           style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}
         >
           Update Password
@@ -2708,9 +2797,10 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
             <MapScreen events={events} onEventSelected={setSelectedEvent} t={t} />
           </div>
         )}
+
       </div>
-      
-     {showVisitorProfile && (
+
+           {showVisitorProfile && (
   <VisitorProfile
     onClose={() => setShowVisitorProfile(false)}
     lang={lang}
@@ -2719,6 +2809,7 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
     onLoginClick={() => { setShowVisitorProfile(false); setIsVisitor(false); }}
   />
 )}
+
     </div>
   );
 }
