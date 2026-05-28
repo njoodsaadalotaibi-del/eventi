@@ -10,6 +10,11 @@ import React, { useState, useEffect } from "react";
 
 
 const Orange = "#FF5722";
+const shortLocation = (location) => {
+  if (!location) return "";
+  return location.split(",")[0].trim();
+};
+
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
 const translations = {
@@ -230,7 +235,7 @@ function EventCard({ event, onClick, lang }) {
       </div>
       <div style={{ padding: "12px 14px" }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 4 }}>{event.name}</div>
-        <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>📍 {event.location}</div>
+        <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>📍 {shortLocation(event.location)}</div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ fontSize: 11, color: "#999" }}>{event.category}</span>
           <span style={{ fontSize: 11, color: Orange, fontWeight: 600 }}>{event.distance}</span>
@@ -532,12 +537,12 @@ useEffect(() => {
       
       <div style={{ padding: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#111", margin: "0 0 6px" }}>{event.name}</h2>
-        <a href={`https://www.google.com/maps/search/?api=1&query=${event.lat},${event.lng}`}
+     <a href={`https://www.google.com/maps/search/?api=1&query=${event.lat},${event.lng}`}
   target="_blank"
   rel="noreferrer"
-  style={{ fontSize: 12, color: Orange, marginBottom: 12, display: "block", textDecoration: "none" }}
+  style={{ fontSize: 12, color: "#3B82F6", marginBottom: 12, display: "block", textDecoration: "none" }}
 >
-  📍 {event.location} →
+  📍 {shortLocation(event.location)} →
 </a>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {[["📅", event.date], ["⏰", event.time], ["📍", event.distance]].filter(([, text]) => text && text !== "TBD").map(([emoji, text]) => (
@@ -590,14 +595,19 @@ useEffect(() => {
     <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Hosted by</div>
     <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.host || "Organizer"}</div>
   </div>
-  <div style={{ width: 1, background: "#eee" }} />
-  <div style={{ flex: 1, textAlign: "center" }}>
-    <div style={{ fontSize: 24 }}>🎪</div>
-    <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Booths available</div>
-    <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.booths} booths</div>
-  </div>
+  {event.show_booths !== false && (
+    <>
+      <div style={{ width: 1, background: "#eee" }} />
+      <div style={{ flex: 1, textAlign: "center" }}>
+        <div style={{ fontSize: 24 }}>🎪</div>
+        <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Booths available</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.booths} booths</div>
+      </div>
+    </>
+  )}
 </div>
-       {event.floor_map_url && (
+
+{event.show_booths !== false && event.floor_map_url && (
   <button
     onClick={() => setShowBoothMapViewer(true)}
     style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
@@ -605,7 +615,7 @@ useEffect(() => {
     🗺️ View & Reserve Booth
   </button>
 )}
-{!event.floor_map_url && (
+{event.show_booths !== false && !event.floor_map_url && (
   <button onClick={() => setShowReservation(true)} style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
     {t.reserveBooth}
   </button>
@@ -707,7 +717,9 @@ const [lng, setLng] = useState(47.9774);
 
 const [eventImages, setEventImages] = useState([]);
 
+const [isFeatured, setIsFeatured] = useState(false);
 
+const [showBoothCount, setShowBoothCount] = useState(true);
 
 useEffect(() => {
   if (activeTab !== "events") return;
@@ -826,7 +838,7 @@ useEffect(() => {
     setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
+        name: eventName, featured: isFeatured, category: selectedCat, show_booth_count: showBoothCount, show_booths: showBoothCount, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -1097,6 +1109,54 @@ if (published) return (
             <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.description}</label>
             <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} placeholder={isAr ? "اكتب وصف الفعالية..." : "Tell people what your event is about..."} value={description} onChange={e => setDescription(e.target.value)} />
           </div>
+
+
+<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>⭐ Feature this event</div>
+    <div style={{ fontSize: 11, color: "#999" }}>Show in the featured slider on home screen</div>
+  </div>
+  <div
+    onClick={() => setIsFeatured(prev => !prev)}
+    style={{
+      width: 44, height: 24, borderRadius: 12,
+      background: isFeatured ? Orange : "#ddd",
+      position: "relative", cursor: "pointer", transition: "background 0.2s"
+    }}
+  >
+    <div style={{
+      position: "absolute", top: 2,
+      left: isFeatured ? 22 : 2,
+      width: 20, height: 20, borderRadius: "50%",
+      background: "#fff", transition: "left 0.2s"
+    }} />
+  </div>
+</div>
+
+
+<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
+  <div>
+ <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show booth section</div>
+<div style={{ fontSize: 11, color: "#999" }}>Show booth reservation on event page</div>  </div>
+  <div
+    onClick={() => setShowBoothCount(prev => !prev)}
+    style={{
+      width: 44, height: 24, borderRadius: 12,
+      background: showBoothCount ? Orange : "#ddd",
+      position: "relative", cursor: "pointer", transition: "background 0.2s"
+    }}
+  >
+    <div style={{
+      position: "absolute", top: 2,
+      left: showBoothCount ? 22 : 2,
+      width: 20, height: 20, borderRadius: "50%",
+      background: "#fff", transition: "left 0.2s"
+    }} />
+  </div>
+</div>
+
+
+
           {error && <div style={{ color: "red", fontSize: 12, textAlign: "center" }}>{error}</div>}
           <button onClick={handlePublish} disabled={isPublishing} style={{
             width: "100%", padding: 14, borderRadius: 16, border: "none",
@@ -1209,7 +1269,7 @@ if (published) return (
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
             <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
-<div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
+<div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {shortLocation(event.location)}</div>
 <div style={{ fontSize: 11, color: "#6B21A8", marginTop: 2 }}>
   👤 {event.organizerName}
 </div>
@@ -2014,7 +2074,9 @@ const [publishedEvent, setPublishedEvent] = useState(null);
   const [loadingRes, setLoadingRes] = useState(false);
   const [activeTab, setActiveTab] = useState("create");
 
-  
+  const [isFeatured, setIsFeatured] = useState(false);
+
+const [showBoothCount, setShowBoothCount] = useState(true);
 
 
   useEffect(() => {
@@ -2068,7 +2130,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
     setIsPublishing(true); setError("");
     try {
       const newEvent = {
-        name: eventName, category: selectedCat, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
+        name: eventName, featured: isFeatured,category: selectedCat, show_booth_count: showBoothCount, show_booths: showBoothCount, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -2309,6 +2371,54 @@ if (published) return (
           
           <div><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.description}</label>
             <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} placeholder="Tell people about your event..." value={description} onChange={e => setDescription(e.target.value)} /></div>
+
+
+
+<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>⭐ Feature this event</div>
+    <div style={{ fontSize: 11, color: "#999" }}>Show in the featured slider on home screen</div>
+  </div>
+  <div
+    onClick={() => setIsFeatured(prev => !prev)}
+    style={{
+      width: 44, height: 24, borderRadius: 12,
+      background: isFeatured ? Orange : "#ddd",
+      position: "relative", cursor: "pointer", transition: "background 0.2s"
+    }}
+  >
+    <div style={{
+      position: "absolute", top: 2,
+      left: isFeatured ? 22 : 2,
+      width: 20, height: 20, borderRadius: "50%",
+      background: "#fff", transition: "left 0.2s"
+    }} />
+  </div>
+</div>
+
+
+
+<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
+  <div>
+<div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show booth section</div>
+<div style={{ fontSize: 11, color: "#999" }}>Show booth reservation on event page</div></div>
+  <div
+    onClick={() => setShowBoothCount(prev => !prev)}
+    style={{
+      width: 44, height: 24, borderRadius: 12,
+      background: showBoothCount ? Orange : "#ddd",
+      position: "relative", cursor: "pointer", transition: "background 0.2s"
+    }}
+  >
+    <div style={{
+      position: "absolute", top: 2,
+      left: showBoothCount ? 22 : 2,
+      width: 20, height: 20, borderRadius: "50%",
+      background: "#fff", transition: "left 0.2s"
+    }} />
+  </div>
+</div>
+
           {error && <div style={{ color: "red", fontSize: 12, textAlign: "center" }}>{error}</div>}
           <button onClick={handlePublish} disabled={isPublishing} style={{
             width: "100%", padding: 14, borderRadius: 16, border: "none",
@@ -2437,7 +2547,7 @@ if (published) return (
             <img src={event.image_url} alt={event.name} style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 10, marginBottom: 8 }} />
           )}
           <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
-          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
+          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {shortLocation(event.location)}</div>
           <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
           <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
         </div>
@@ -3113,6 +3223,94 @@ function VisitorProfile({ onClose, lang, visitorInfo, onSave, onLoginClick }) {
 }
 
 
+
+
+
+
+
+
+
+
+function FeaturedSlider({ events, onEventClick }) {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (events.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrent(prev => (prev + 1) % events.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [events.length]);
+
+  if (events.length === 0) return null;
+
+  const event = events[current];
+
+  const gradients = [
+    "linear-gradient(135deg, #FF8C00, #FF5722)",
+    "linear-gradient(135deg, #3B82F6, #6366F1)",
+    "linear-gradient(135deg, #22C55E, #059669)",
+    "linear-gradient(135deg, #A855F7, #7C3AED)",
+    "linear-gradient(135deg, #EC4899, #DB2777)",
+  ];
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+     
+      <div
+        onClick={() => onEventClick(event)}
+        style={{
+          position: "relative", height: 140, borderRadius: 16,
+          overflow: "hidden", cursor: "pointer",
+          background: event.image_url ? "transparent" : gradients[current % gradients.length],
+          transition: "all 0.3s"
+        }}
+      >
+        {event.image_url && (
+          <img src={event.image_url} alt={event.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+        )}
+
+{event.show_booth_count && event.booths > 0 && (
+  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.8)" }}>🎪 {event.booths} booths</span>
+)}
+
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0.1))" }} />
+        <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", marginBottom: 3 }}>
+            {event.date !== "TBD" && `📅 ${event.date} · `}{event.location?.split(",")[0]}
+          </div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 6 }}>{event.name}</div>
+          
+          
+<div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+  <span style={{ background: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 700, color: Orange }}>{event.price}</span>
+</div>
+
+        </div>
+
+        {/* Dots */}
+        {events.length > 1 && (
+          <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center" }}>
+            {events.map((_, i) => (
+              <div
+                key={i}
+                onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
+                style={{
+                  height: 6, borderRadius: 3,
+                  width: i === current ? 16 : 6,
+                  background: i === current ? "#fff" : "rgba(255,255,255,0.5)",
+                  transition: "all 0.2s", cursor: "pointer"
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
 
 
@@ -3342,6 +3540,12 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
       <div style={{ flex: 1, overflow: "auto" }}>
         {activeTab === "discover" && (
           <div style={{ padding: "16px 20px" }}>
+
+{/* Featured slider */}
+{events.filter(e => e.featured).length > 0 && (
+  <FeaturedSlider events={events.filter(e => e.featured)} onEventClick={setSelectedEvent} />
+)}
+
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 12 }}>{t.categories}</div>
             <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8, marginBottom: 20 }}>
               {categoriesData.map(cat => (
