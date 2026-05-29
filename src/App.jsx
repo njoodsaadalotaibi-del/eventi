@@ -259,7 +259,7 @@ function EventCard({ event, onClick, lang }) {
 
 function CategoryItem({ category, isSelected, onClick, lang }) {
   return (
-    <div onClick={() => onClick(category.name)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", minWidth: 60 }}>
+    <div onClick={() => onClick(category.name)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer" }}>
       <div style={{
         width: 52, height: 52, borderRadius: "50%",
         background: isSelected ? Orange : "#fff",
@@ -694,7 +694,7 @@ useEffect(() => {
 
 }
 
-function AdminScreen({ onBack, lang, onEventPublished,  onEventDeleted, user }) {
+function AdminScreen({ onBack, lang, onEventPublished,  onEventDeleted, onEventClick, user }) {
 
 
 
@@ -722,8 +722,11 @@ const [floorMapUrl, setFloorMapUrl] = useState("");
   const [reservations, setReservations] = useState([]);
   const [loadingRes, setLoadingRes] = useState(false);
 
-  const [orgRequests, setOrgRequests] = useState([]);
-const [loadingOrg, setLoadingOrg] = useState(false);
+
+
+const [promoteEmail, setPromoteEmail] = useState("");
+const [promoteMsg, setPromoteMsg] = useState("");
+const [organizers, setOrganizers] = useState([]);
 
 const [locationSuggestions, setLocationSuggestions] = useState([]);
 const [lat, setLat] = useState(29.3759);
@@ -775,15 +778,11 @@ setMyEvents(eventsWithOrganizers);
 
 useEffect(() => {
   if (activeTab !== "organizers") return;
-  const fetchOrgRequests = async () => {
-    setLoadingOrg(true);
-    const { data } = await supabase
-      .from("organizer_requests").select("*")
-      .order("created_at", { ascending: false });
-    setOrgRequests(data || []);
-    setLoadingOrg(false);
+  const fetchOrganizers = async () => {
+    const { data } = await supabase.from("users").select("*").eq("role", "organizer");
+    setOrganizers(data || []);
   };
-  fetchOrgRequests();
+  fetchOrganizers();
 }, [activeTab]);
 
 
@@ -802,29 +801,7 @@ useEffect(() => {
     setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
   };
 
-  //send organizer request
-
- const updateOrganizerRequest = async (req, status) => {
-  try {
-    const { error: reqError } = await supabase
-      .from("organizer_requests").update({ status }).eq("id", req.id);
-    if (reqError) { console.error("Request update error:", reqError); return; }
-    
-    if (status === "approved") {
-      const { error: userError } = await supabase
-        .from("users").update({ role: "organizer" }).eq("id", req.user_id);
-      if (userError) { 
-        console.error("User role update error:", userError); 
-        alert("Failed to update user role: " + userError.message);
-        return; 
-      }
-      alert("✅ Organizer approved successfully!");
-    }
-    setOrgRequests(prev => prev.map(r => r.id === req.id ? { ...r, status } : r));
-  } catch (err) {
-    console.error(err);
-  }
-};
+ 
 
 
   const handleDeleteEvent = async (eventId) => {
@@ -1252,44 +1229,75 @@ if (published) return (
       {/* organizer tab*/}
       {activeTab === "organizers" && (
   <div style={{ padding: 20 }}>
-    {loadingOrg && <div style={{ textAlign: "center", color: Orange, padding: 40 }}>⏳</div>}
-    {!loadingOrg && orgRequests.length === 0 && (
-      <div style={{ textAlign: "center", color: "#999", padding: 40 }}>{t.noOrganizerRequests}</div>
-    )}
-    {!loadingOrg && orgRequests.map(req => (
-      <div key={req.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-    <div style={{ flex: 1 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{req.name}</div>
-      <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{req.email}</div>
-      {req.company_name && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>🏢 {req.company_name}</div>}
-      {req.event_type && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>🎪 {req.event_type}</div>}
-      {req.phone && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>📞 {req.phone}</div>}
-      {req.instagram && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>📸 {req.instagram}</div>}
-      {req.reason && <div style={{ fontSize: 11, color: "#666", marginTop: 4, fontStyle: "italic" }}>"{req.reason}"</div>}
-      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
-        {req.has_organized_before ? "✓ Has organized before" : "✗ First time organizer"}
+    <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 12 }}>Promote a user to Organizer</div>
+    <div style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>Enter the user's email to make them an organizer.</div>
+
+    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+      <input
+        placeholder="user@email.com"
+        value={promoteEmail}
+        onChange={e => setPromoteEmail(e.target.value)}
+        style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+      />
+      <button
+        onClick={async () => {
+          if (!promoteEmail) return;
+          setPromoteMsg("");
+          try {
+            const { data: foundUser } = await supabase
+              .from("users").select("*").eq("email", promoteEmail.trim().toLowerCase()).single();
+            if (!foundUser) { setPromoteMsg("❌ No user found with that email."); return; }
+            if (foundUser.role === "organizer") { setPromoteMsg("ℹ️ This user is already an organizer."); return; }
+            if (foundUser.role === "admin") { setPromoteMsg("ℹ️ This user is an admin."); return; }
+            const { error } = await supabase
+              .from("users").update({ role: "organizer" }).eq("id", foundUser.id);
+            if (error) throw error;
+            setPromoteMsg(`✅ ${foundUser.name || foundUser.email} is now an organizer!`);
+            setPromoteEmail("");
+            // refresh organizer list
+            const { data: orgs } = await supabase.from("users").select("*").eq("role", "organizer");
+            setOrganizers(orgs || []);
+          } catch (err) {
+            console.error(err);
+            setPromoteMsg("❌ " + err.message);
+          }
+        }}
+        style={{ padding: "10px 18px", borderRadius: 12, border: "none", background: Orange, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+      >
+        Promote
+      </button>
+    </div>
+
+    {promoteMsg && (
+      <div style={{ fontSize: 13, color: promoteMsg.startsWith("✅") ? "#085041" : "#c62828", marginBottom: 16 }}>
+        {promoteMsg}
       </div>
-    </div>
-    <span style={{
-      padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-      background: req.status === "approved" ? "#E1F5EE" : req.status === "rejected" ? "#FFEBEE" : "#FEF3E2",
-      color: req.status === "approved" ? "#085041" : req.status === "rejected" ? "#c62828" : "#633806"
-    }}>
-      {req.status === "approved" ? t.approved : req.status === "rejected" ? t.rejected : t.pending}
-    </span>
-  </div>
-  {req.status === "pending" && (
-    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-      <button onClick={() => updateOrganizerRequest(req, "approved")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✓ {t.approve}</button>
-      <button onClick={() => updateOrganizerRequest(req, "rejected")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕ {t.reject}</button>
-    </div>
-  )}
-</div>
+    )}
+
+    <div style={{ fontWeight: 700, fontSize: 15, color: "#111", margin: "20px 0 12px" }}>Current Organizers</div>
+    {organizers.length === 0 && (
+      <div style={{ textAlign: "center", color: "#999", padding: 20 }}>No organizers yet</div>
+    )}
+    {organizers.map(org => (
+      <div key={org.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{org.name || org.email}</div>
+          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{org.email}</div>
+        </div>
+        <button
+          onClick={async () => {
+            if (!window.confirm(`Remove organizer access from ${org.name || org.email}?`)) return;
+            await supabase.from("users").update({ role: "consumer" }).eq("id", org.id);
+            setOrganizers(prev => prev.filter(o => o.id !== org.id));
+          }}
+          style={{ padding: "6px 12px", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+        >
+          Remove
+        </button>
+      </div>
     ))}
   </div>
 )}
-
 
 
 {activeTab === "events" && (
@@ -1299,7 +1307,7 @@ if (published) return (
       <div style={{ textAlign: "center", color: "#999", padding: 40 }}>No events yet</div>
     )}
     {!loadingEvents && myEvents.map(event => (
-      <div key={event.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+  <div key={event.id} onClick={() => onEventClick && onEventClick(event)} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", cursor: "pointer" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             {event.image_url && (
@@ -1317,18 +1325,18 @@ if (published) return (
           </div>
         </div>
        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-  <button
-    onClick={() => setEditingEvent(event)}
-    style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-  >
-    ✏️ Edit
-  </button>
-  <button
-    onClick={() => handleDeleteEvent(event.id)}
-    style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-  >
-    🗑️ Delete
-  </button>
+<button
+  onClick={(e) => { e.stopPropagation(); setEditingEvent(event); }}
+  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+>
+  ✏️ Edit
+</button>
+<button
+  onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+>
+  🗑️ Delete
+</button>
 </div>
       </div>
     ))}
@@ -1657,15 +1665,14 @@ function ProfileScreen({ user, userProfile, onBack, onLogout, lang, onProfileUpd
   const [myReservations, setMyReservations] = useState([]);
   const [myEvents, setMyEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showOrganizerForm, setShowOrganizerForm] = useState(false);
+ 
   
-  const [requestSent, setRequestSent] = useState(false);
-  const [requestStatus, setRequestStatus] = useState(null);
+
+  
   const [activeTab, setActiveTab] = useState("reservations");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatar_url || null);
-  const [orgForm, setOrgForm] = useState({ company_name: "", event_type: "", phone: "", contact_email: user.email, instagram: "", reason: "", has_organized_before: false });
-
+  
 const [showEditProfile, setShowEditProfile] = useState(false);
 const [editName, setEditName] = useState(userProfile?.name || "");
 const [editPhone, setEditPhone] = useState(userProfile?.phone || "");
@@ -1689,11 +1696,7 @@ const [profileSaved, setProfileSaved] = useState(false);
   .order("created_at", { ascending: false });
       setMyEvents(attendData || []);
 
-      // Fetch organizer request status
-      const { data: reqData } = await supabase
-        .from("organizer_requests").select("*")
-        .eq("user_id", user.id).single();
-      if (reqData) setRequestStatus(reqData.status);
+      
       setLoading(false);
     };
     fetchData();
@@ -1722,29 +1725,7 @@ const [profileSaved, setProfileSaved] = useState(false);
     }
   };
 
-const handleOrganizerRequest = async () => {
-  if (!orgForm.company_name || !orgForm.phone) { 
-    alert("Please fill in company name and phone number");
-    return; 
-  }
-  try {
-    await supabase.from("organizer_requests").insert([{
-      user_id: user.id,
-      email: user.email,
-      name: userProfile?.name || user.email,
-      company_name: orgForm.company_name,
-      event_type: orgForm.event_type,
-      phone: orgForm.phone,
-      instagram: orgForm.instagram,
-      reason: orgForm.reason,
-      has_organized_before: orgForm.has_organized_before,
-      status: "pending"
-    }]);
-    setRequestSent(true);
-    setRequestStatus("pending");
-    setShowOrganizerForm(false);
-  } catch (err) { console.error(err); }
-};
+
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr" }}>
@@ -1817,79 +1798,7 @@ const handleOrganizerRequest = async () => {
           </div>
         </div>
 
-       {/* Become organizer section */}
-{userProfile?.role === "consumer" && !userProfile?.dismissed_organizer && (
-  <div style={{ background: "#fff", borderRadius: 20, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-    {requestStatus === "pending" && (
-      <div style={{ textAlign: "center", color: "#633806", fontSize: 13 }}>⏳ {t.organizerStatus}</div>
-    )}
-    {requestStatus === "approved" && (
-      <div style={{ textAlign: "center", color: "#085041", fontSize: 13 }}>✅ {t.youAreOrganizer}</div>
-    )}
-    {!requestStatus && !showOrganizerForm && (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button onClick={() => setShowOrganizerForm(true)} style={{ flex: 1, padding: 12, borderRadius: 14, border: `1px solid ${Orange}`, background: "transparent", color: Orange, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-          🎪 {t.becomeOrganizer}
-        </button>
-        <button
-          onClick={async () => {
-            await supabase.from("users").update({ dismissed_organizer: true }).eq("id", user.id);
-            if (onProfileUpdate) onProfileUpdate({ ...userProfile, dismissed_organizer: true });
-          }}
-          style={{ marginLeft: 8, width: 32, height: 32, borderRadius: "50%", border: "1px solid #eee", background: "#fff", color: "#999", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-        >✕</button>
-      </div>
-    )}
-    {showOrganizerForm && (
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 16, color: "#111", marginBottom: 16 }}>🎪 Organizer Application</div>
-        
-        {[
-          { label: "Company / Brand Name", key: "company_name", placeholder: "e.g. Events Co." },
-          { label: "Type of Events", key: "event_type", placeholder: "e.g. Food festivals, Music events" },
-          { label: "Contact Number", key: "phone", placeholder: "e.g. +965 XXXX XXXX" },
-          { label: "Email", key: "contact_email", placeholder: "company@email.com" },
-          { label: "Instagram Account", key: "instagram", placeholder: "@yourhandle" },
-          { label: "Short Description", key: "reason", placeholder: "Tell us about your company..." },
-        ].map(field => (
-          <div key={field.key} style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{field.label}</label>
-            <input
-              placeholder={field.placeholder}
-              value={orgForm[field.key] || ""}
-              onChange={e => setOrgForm(p => ({ ...p, [field.key]: e.target.value }))}
-              style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-            />
-          </div>
-        ))}
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>Have you organized events before?</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => setOrgForm(p => ({ ...p, has_organized_before: true }))}
-              style={{ flex: 1, padding: 10, borderRadius: 12, border: "none", background: orgForm.has_organized_before ? "#E1F5EE" : "#f8f8f8", color: orgForm.has_organized_before ? "#085041" : "#999", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-            >✓ Yes</button>
-            <button
-              onClick={() => setOrgForm(p => ({ ...p, has_organized_before: false }))}
-              style={{ flex: 1, padding: 10, borderRadius: 12, border: "none", background: orgForm.has_organized_before === false ? "#FFEBEE" : "#f8f8f8", color: orgForm.has_organized_before === false ? "#c62828" : "#999", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-            >✕ No</button>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={handleOrganizerRequest} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: Orange, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            📤 Submit Application
-          </button>
-          <button onClick={() => setShowOrganizerForm(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #eee", background: "#fff", color: "#999", fontSize: 13, cursor: "pointer" }}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    )}
-    {requestSent && <div style={{ textAlign: "center", color: "#085041", fontSize: 13, marginTop: 8 }}>✅ Application submitted! We'll review it shortly.</div>}
-  </div>
-)}
+       
 
        {/* Tabs */}
         <div style={{ background: "#fff", borderRadius: 14, display: "flex", marginBottom: 16, overflow: "hidden" }}>
@@ -2078,7 +1987,7 @@ const handleOrganizerRequest = async () => {
   );
 }
 
-function OrganizerScreen({ onBack, lang, onEventPublished, userProfile, onEventDeleted,  user }) {
+function OrganizerScreen({ onBack, lang, onEventPublished, userProfile, onEventDeleted,  onEventClick, user }) {
 
 
   const [eventImages, setEventImages] = useState([]);
@@ -2616,7 +2525,7 @@ if (published) return (
       <div style={{ textAlign: "center", color: "#999", padding: 40 }}>No events yet</div>
     )}
     {!loadingEvents && myEvents.map(event => (
-      <div key={event.id} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+  <div key={event.id} onClick={() => onEventClick && onEventClick(event)} style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", cursor: "pointer" }}>
         <div style={{ flex: 1 }}>
           {event.image_url && (
             <img src={event.image_url} alt={event.name} style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 10, marginBottom: 8 }} />
@@ -2626,12 +2535,12 @@ if (published) return (
           <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
           <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
         </div>
-        <button
-          onClick={() => handleDeleteEvent(event.id)}
-          style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-        >
-          🗑️ Delete Event
-        </button>
+       <button
+  onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+  style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+>
+  🗑️ Delete Event
+</button>
       </div>
     ))}
   </div>
@@ -3613,8 +3522,8 @@ useEffect(() => {
 
 if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "visitor") setIsVisitor(true); }} lang={lang} />;
   if (selectedEvent) return <EventDetail event={selectedEvent} onBack={() => setSelectedEvent(null)} lang={lang} userEmail={user?.email} userId={user?.id} />;
-  if (showAdmin) return <AdminScreen onBack={() => setShowAdmin(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} onEventDeleted={(id) => setEvents(prev => prev.filter(e => e.id !== id))} user={user} />;
-  if (showOrganizer) return <OrganizerScreen onBack={() => setShowOrganizer(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} onEventDeleted={(id) => setEvents(prev => prev.filter(e => e.id !== id))} user={user} userProfile={userProfile} />;
+  if (showAdmin) return <AdminScreen onBack={() => setShowAdmin(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} onEventDeleted={(id) => setEvents(prev => prev.filter(e => e.id !== id))} onEventClick={(event) => { setShowAdmin(false); setSelectedEvent(event); }} user={user} />;
+  if (showOrganizer) return <OrganizerScreen onBack={() => setShowOrganizer(false)} lang={lang} onEventPublished={(e) => { setEvents(prev => [...prev, e]); }} onEventDeleted={(id) => setEvents(prev => prev.filter(e => e.id !== id))} onEventClick={(event) => { setShowOrganizer(false); setSelectedEvent(event); }} user={user} userProfile={userProfile} />;
   if (showProfile) return (
   <ProfileScreen
     user={user}
@@ -3709,11 +3618,11 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
 )}
 
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 12 }}>{t.categories}</div>
-            <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8, marginBottom: 20 }}>
-              {categoriesData.map(cat => (
-                <CategoryItem key={cat.name} category={cat} isSelected={selectedCategory === cat.name} onClick={setSelectedCategory} lang={lang} />
-              ))}
-            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+  {categoriesData.map(cat => (
+    <CategoryItem key={cat.name} category={cat} isSelected={selectedCategory === cat.name} onClick={setSelectedCategory} lang={lang} />
+  ))}
+</div>
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 12 }}>{t.upcoming}</div>
             {isLoading && <div style={{ textAlign: "center", padding: 40, color: Orange }}>⏳ {t.loading}</div>}
             {error && <div style={{ textAlign: "center", padding: 40, color: "red", fontSize: 13 }}>{error}</div>}
