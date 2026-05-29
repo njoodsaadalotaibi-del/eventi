@@ -15,6 +15,16 @@ const shortLocation = (location) => {
   return location.split(",")[0].trim();
 };
 
+const getDistanceKm = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
 const translations = {
@@ -22,7 +32,7 @@ const translations = {
     title: "Let's have fun!",
     subtitle: "events around you!",
     categories: "Categories",
-    upcoming: "Upcoming events nearby",
+    upcoming: "Upcoming events ",
     noEvents: "No events in this category",
     loading: "Loading events...",
     error: "Could not load events. Check your connection.",
@@ -200,6 +210,8 @@ const categoriesData = [
   { name: "Party", nameAr: "حفلة", emoji: "🎉" },
   { name: "Food", nameAr: "طعام", emoji: "🍕" },
   { name: "Sport", nameAr: "رياضة", emoji: "⚽" },
+   { name: "Deen", nameAr: "دين", emoji: "🕌" },
+  { name: "Pop-up", nameAr: "بوب أب", emoji: "🛍️" },
 ];
 
 const mapContainerStyle = { width: "100%", height: "100%" };
@@ -238,7 +250,7 @@ function EventCard({ event, onClick, lang }) {
         <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>📍 {shortLocation(event.location)}</div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ fontSize: 11, color: "#999" }}>{event.category}</span>
-          <span style={{ fontSize: 11, color: Orange, fontWeight: 600 }}>{event.distance}</span>
+          
         </div>
       </div>
     </div>
@@ -481,7 +493,7 @@ useEffect(() => {
 }, [event.id, userEmail]);
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "Arial, sans-serif" : "sans-serif" }}>
+    <div style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "#f8f8f8", minHeight: "100vh", direction: isAr ? "rtl" : "ltr", fontFamily: isAr ? "Arial, sans-serif" : "sans-serif", boxSizing: "border-box" }}>
       <div style={{ background: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #eee" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#111" }}>{isAr ? "→" : "←"}</button>
         <span style={{ fontWeight: 700, fontSize: 16, color: "#111" }}>{event.name}</span>
@@ -545,7 +557,7 @@ useEffect(() => {
   📍 {shortLocation(event.location)} →
 </a>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {[["📅", event.date], ["⏰", event.time], ["📍", event.distance]].filter(([, text]) => text && text !== "TBD").map(([emoji, text]) => (
+        {[["📅", event.date], ["⏰", event.time]].filter(([, text]) => text && text !== "TBD").map(([emoji, text]) => (
   <div key={text} style={{ background: "#fff", borderRadius: 20, padding: "6px 12px", fontSize: 11, color: "#666", display: "flex", gap: 4, alignItems: "center" }}>
     {emoji} {text}
   </div>
@@ -589,23 +601,27 @@ useEffect(() => {
 
 
 {/* Host info */}
-<div style={{ background: "#fff", borderRadius: 16, padding: 16, display: "flex", marginBottom: 16 }}>
-  <div style={{ flex: 1, textAlign: "center" }}>
-    <div style={{ fontSize: 24 }}>🏢</div>
-    <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Hosted by</div>
-    <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.host || "Organizer"}</div>
-  </div>
-  {event.show_booths !== false && (
-    <>
+{(event.show_host !== false || event.show_booths !== false) && (
+  <div style={{ background: "#fff", borderRadius: 16, padding: 16, display: "flex", marginBottom: 16 }}>
+    {event.show_host !== false && (
+      <div style={{ flex: 1, textAlign: "center" }}>
+        <div style={{ fontSize: 24 }}>🏢</div>
+        <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Hosted by</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.host || "Organizer"}</div>
+      </div>
+    )}
+    {event.show_host !== false && event.show_booths !== false && (
       <div style={{ width: 1, background: "#eee" }} />
+    )}
+    {event.show_booths !== false && (
       <div style={{ flex: 1, textAlign: "center" }}>
         <div style={{ fontSize: 24 }}>🎪</div>
         <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>Booths available</div>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{event.booths} booths</div>
       </div>
-    </>
-  )}
-</div>
+    )}
+  </div>
+)}
 
 {event.show_booths !== false && event.floor_map_url && (
   <button
@@ -682,7 +698,7 @@ function AdminScreen({ onBack, lang, onEventPublished,  onEventDeleted, user }) 
 
 
 
-  const [showBoothMap, setShowBoothMap] = useState(false);
+const [showBoothMap, setShowBoothMap] = useState(false);
 const [publishedEvent, setPublishedEvent] = useState(null);
   const [myEvents, setMyEvents] = useState([]);
 const [loadingEvents, setLoadingEvents] = useState(false);
@@ -699,7 +715,7 @@ const [floorMapUrl, setFloorMapUrl] = useState("");
   const [price, setPrice] = useState("");
   const [booths, setBooths] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedCat, setSelectedCat] = useState("Outside");
+  const [selectedCats, setSelectedCats] = useState([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState("");
   const [published, setPublished] = useState(false);
@@ -719,7 +735,13 @@ const [eventImages, setEventImages] = useState([]);
 
 const [isFeatured, setIsFeatured] = useState(false);
 
-const [showBoothCount, setShowBoothCount] = useState(true);
+
+const [showReserveButton, setShowReserveButton] = useState(true);
+
+const [showHost, setShowHost] = useState(true);
+
+
+
 
 useEffect(() => {
   if (activeTab !== "events") return;
@@ -838,7 +860,7 @@ useEffect(() => {
     setError("");
     try {
       const newEvent = {
-        name: eventName, featured: isFeatured, category: selectedCat, show_booth_count: showBoothCount, show_booths: showBoothCount, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
+        name: eventName, featured: isFeatured, category: selectedCats[0] || "Outside", categories: selectedCats.length > 0 ? selectedCats : ["Outside"], show_booth_count: showReserveButton, show_booths: showReserveButton,  show_host: showHost, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -886,18 +908,6 @@ if (published) return (
     </button>
   </div>
 );
-
-
-  if (published) return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-      <span style={{ fontSize: 72 }}>🎉</span>
-      <div style={{ fontSize: 24, fontWeight: 700, color: "#111" }}>{t.published}</div>
-      <div style={{ fontSize: 14, color: "#999" }}>{t.publishedSub}</div>
-      <button onClick={onBack} style={{ marginTop: 16, padding: "12px 32px", borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-        {t.backHome}
-      </button>
-    </div>
-  );
 
 
   return (
@@ -1023,18 +1033,23 @@ if (published) return (
 
           <div>
             <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>{t.category}</label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {categoriesData.filter(c => c.name !== "All").map(cat => (
-                <button key={cat.name} onClick={() => setSelectedCat(cat.name)} style={{
-                  padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer",
-                  background: selectedCat === cat.name ? Orange : "#fff",
-                  color: selectedCat === cat.name ? "#fff" : "#999",
-                  fontSize: 12, fontWeight: selectedCat === cat.name ? 700 : 400
-                }}>
-                  {isAr ? categoriesData.find(c => c.name === cat.name)?.nameAr : cat.name}
-                </button>
-              ))}
-            </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+  {categoriesData.filter(c => c.name !== "All").map(cat => {
+    const isSelected = selectedCats.includes(cat.name);
+    return (
+      <button key={cat.name} onClick={() => {
+        setSelectedCats(prev => isSelected ? prev.filter(c => c !== cat.name) : [...prev, cat.name]);
+      }} style={{
+        padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer",
+        background: isSelected ? Orange : "#fff",
+        color: isSelected ? "#fff" : "#999",
+        fontSize: 12, fontWeight: isSelected ? 700 : 400
+      }}>
+        {isSelected ? "✓ " : ""}{isAr ? cat.nameAr : cat.name}
+      </button>
+    );
+  })}
+</div>
           </div>
           <div style={{ position: "relative" }}>
   <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.location}</label>
@@ -1136,19 +1151,43 @@ if (published) return (
 
 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
   <div>
- <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show booth section</div>
-<div style={{ fontSize: 11, color: "#999" }}>Show booth reservation on event page</div>  </div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show "Reserve a Booth" button</div>
+    <div style={{ fontSize: 11, color: "#999" }}>Let attendees reserve booths for this event</div>
+  </div>
   <div
-    onClick={() => setShowBoothCount(prev => !prev)}
+    onClick={() => setShowReserveButton(prev => !prev)}
     style={{
       width: 44, height: 24, borderRadius: 12,
-      background: showBoothCount ? Orange : "#ddd",
+      background: showReserveButton ? Orange : "#ddd",
       position: "relative", cursor: "pointer", transition: "background 0.2s"
     }}
   >
     <div style={{
       position: "absolute", top: 2,
-      left: showBoothCount ? 22 : 2,
+      left: showReserveButton ? 22 : 2,
+      width: 20, height: 20, borderRadius: "50%",
+      background: "#fff", transition: "left 0.2s"
+    }} />
+  </div>
+</div>
+
+
+<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🏢 Show "Hosted by"</div>
+    <div style={{ fontSize: 11, color: "#999" }}>Show organizer name on event page</div>
+  </div>
+  <div
+    onClick={() => setShowHost(prev => !prev)}
+    style={{
+      width: 44, height: 24, borderRadius: 12,
+      background: showHost ? Orange : "#ddd",
+      position: "relative", cursor: "pointer", transition: "background 0.2s"
+    }}
+  >
+    <div style={{
+      position: "absolute", top: 2,
+      left: showHost ? 22 : 2,
       width: 20, height: 20, borderRadius: "50%",
       background: "#fff", transition: "left 0.2s"
     }} />
@@ -1266,13 +1305,13 @@ if (published) return (
             {event.image_url && (
               <img src={event.image_url} alt={event.name} style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 10, marginBottom: 8 }} />
             )}
+
             <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
-            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {event.location}</div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{event.name}</div>
-<div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {shortLocation(event.location)}</div>
-<div style={{ fontSize: 11, color: "#6B21A8", marginTop: 2 }}>
-  👤 {event.organizerName}
-</div>
+            <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📍 {shortLocation(event.location)}</div>
+            <div style={{ fontSize: 11, color: "#6B21A8", marginTop: 2 }}>
+              👤 {event.organizerName}
+            </div>
+
             <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
             <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
           </div>
@@ -2066,7 +2105,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
   const [price, setPrice] = useState("");
   const [booths, setBooths] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedCat, setSelectedCat] = useState("Outside");
+  const [selectedCats, setSelectedCats] = useState([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState("");
   const [published, setPublished] = useState(false);
@@ -2076,7 +2115,10 @@ const [publishedEvent, setPublishedEvent] = useState(null);
 
   const [isFeatured, setIsFeatured] = useState(false);
 
-const [showBoothCount, setShowBoothCount] = useState(true);
+
+const [showReserveButton, setShowReserveButton] = useState(true);
+
+const [showHost, setShowHost] = useState(true);
 
 
   useEffect(() => {
@@ -2130,7 +2172,7 @@ const [showBoothCount, setShowBoothCount] = useState(true);
     setIsPublishing(true); setError("");
     try {
       const newEvent = {
-        name: eventName, featured: isFeatured,category: selectedCat, show_booth_count: showBoothCount, show_booths: showBoothCount, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",  
+        name: eventName, featured: isFeatured, category: selectedCats[0] || "Outside", categories: selectedCats.length > 0 ? selectedCats : ["Outside"], show_booth_count: showReserveButton, show_booths: showReserveButton,  show_host: showHost, image_url: eventImages[0] || "", floor_map_url: floorMapUrl, organizer_id: user?.id, distance: "Nearby",
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
@@ -2220,16 +2262,23 @@ if (published) return (
           <div><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.eventName}</label>
             <input style={inputStyle} placeholder="e.g. Summer Food Festival" value={eventName} onChange={e => setEventName(e.target.value)} /></div>
           <div><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>{t.category}</label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {categoriesData.filter(c => c.name !== "All").map(cat => (
-                <button key={cat.name} onClick={() => setSelectedCat(cat.name)} style={{
-                  padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer",
-                  background: selectedCat === cat.name ? Orange : "#fff",
-                  color: selectedCat === cat.name ? "#fff" : "#999",
-                  fontSize: 12, fontWeight: selectedCat === cat.name ? 700 : 400
-                }}>{cat.name}</button>
-              ))}
-            </div>
+           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+  {categoriesData.filter(c => c.name !== "All").map(cat => {
+    const isSelected = selectedCats.includes(cat.name);
+    return (
+      <button key={cat.name} onClick={() => {
+        setSelectedCats(prev => isSelected ? prev.filter(c => c !== cat.name) : [...prev, cat.name]);
+      }} style={{
+        padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer",
+        background: isSelected ? Orange : "#fff",
+        color: isSelected ? "#fff" : "#999",
+        fontSize: 12, fontWeight: isSelected ? 700 : 400
+      }}>
+        {isSelected ? "✓ " : ""}{isAr ? cat.nameAr : cat.name}
+      </button>
+    );
+  })}
+</div>
           </div>
          <div style={{ position: "relative" }}>
   <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.location}</label>
@@ -2400,24 +2449,50 @@ if (published) return (
 
 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
   <div>
-<div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show booth section</div>
-<div style={{ fontSize: 11, color: "#999" }}>Show booth reservation on event page</div></div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show "Reserve a Booth" button</div>
+    <div style={{ fontSize: 11, color: "#999" }}>Let attendees reserve booths for this event</div>
+  </div>
   <div
-    onClick={() => setShowBoothCount(prev => !prev)}
+    onClick={() => setShowReserveButton(prev => !prev)}
     style={{
       width: 44, height: 24, borderRadius: 12,
-      background: showBoothCount ? Orange : "#ddd",
+      background: showReserveButton ? Orange : "#ddd",
       position: "relative", cursor: "pointer", transition: "background 0.2s"
     }}
   >
     <div style={{
       position: "absolute", top: 2,
-      left: showBoothCount ? 22 : 2,
+      left: showReserveButton ? 22 : 2,
       width: 20, height: 20, borderRadius: "50%",
       background: "#fff", transition: "left 0.2s"
     }} />
   </div>
 </div>
+
+
+<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12 }}>
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🏢 Show "Hosted by"</div>
+    <div style={{ fontSize: 11, color: "#999" }}>Show organizer name on event page</div>
+  </div>
+  <div
+    onClick={() => setShowHost(prev => !prev)}
+    style={{
+      width: 44, height: 24, borderRadius: 12,
+      background: showHost ? Orange : "#ddd",
+      position: "relative", cursor: "pointer", transition: "background 0.2s"
+    }}
+  >
+    <div style={{
+      position: "absolute", top: 2,
+      left: showHost ? 22 : 2,
+      width: 20, height: 20, borderRadius: "50%",
+      background: "#fff", transition: "left 0.2s"
+    }} />
+  </div>
+</div>
+
+
 
           {error && <div style={{ color: "red", fontSize: 12, textAlign: "center" }}>{error}</div>}
           <button onClick={handlePublish} disabled={isPublishing} style={{
@@ -3086,18 +3161,7 @@ Available (color varies by type)
 >
   {reserving ? "Submitting..." : `📤 Submit Request for Booth ${selectedBooth.booth_number}`}
 </button>
-            <button
-              onClick={handleReserveBooth}
-              disabled={reserving || !name || !email}
-              style={{
-                width: "100%", padding: 14, borderRadius: 16, border: "none",
-                background: reserving || !name || !email ? "#ccc" : Orange,
-                color: "#fff", fontSize: 15, fontWeight: 700,
-                cursor: reserving || !name || !email ? "not-allowed" : "pointer"
-              }}
-            >
-              {reserving ? "Reserving..." : `🎪 Reserve Booth ${selectedBooth.booth_number}`}
-            </button>
+           
           </div>
         )}
 
@@ -3233,12 +3297,14 @@ function VisitorProfile({ onClose, lang, visitorInfo, onSave, onLoginClick }) {
 
 function FeaturedSlider({ events, onEventClick }) {
   const [current, setCurrent] = useState(0);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
 
   useEffect(() => {
     if (events.length <= 1) return;
     const timer = setInterval(() => {
       setCurrent(prev => (prev + 1) % events.length);
-    }, 3000);
+    }, 4000);
     return () => clearInterval(timer);
   }, [events.length]);
 
@@ -3254,43 +3320,82 @@ function FeaturedSlider({ events, onEventClick }) {
     "linear-gradient(135deg, #EC4899, #DB2777)",
   ];
 
+  const goNext = () => setCurrent(prev => (prev + 1) % events.length);
+  const goPrev = () => setCurrent(prev => (prev - 1 + events.length) % events.length);
+
+  // Swipe handlers
+  const minSwipe = 50;
+  const onTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+  const onTouchMove = (e) => setTouchEnd(e.targetTouches[0].clientX);
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    if (distance > minSwipe) goNext();
+    if (distance < -minSwipe) goPrev();
+  };
+
   return (
     <div style={{ marginBottom: 20 }}>
-     
       <div
-        onClick={() => onEventClick(event)}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
         style={{
           position: "relative", height: 140, borderRadius: 16,
-          overflow: "hidden", cursor: "pointer",
+          overflow: "hidden",
           background: event.image_url ? "transparent" : gradients[current % gradients.length],
           transition: "all 0.3s"
         }}
       >
-        {event.image_url && (
-          <img src={event.image_url} alt={event.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+        {/* Clickable image area */}
+        <div onClick={() => onEventClick(event)} style={{ position: "absolute", inset: 0, cursor: "pointer" }}>
+          {event.image_url && (
+            <img src={event.image_url} alt={event.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+          )}
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0.1))" }} />
+          <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", marginBottom: 3 }}>
+              {event.date !== "TBD" && `📅 ${event.date} · `}{event.location?.split(",")[0]}
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 6 }}>{event.name}</div>
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+              <span style={{ background: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 700, color: Orange }}>{event.price}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Left arrow */}
+        {events.length > 1 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            style={{
+              position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+              width: 30, height: 30, borderRadius: "50%", border: "none",
+              background: "rgba(0,0,0,0.4)", color: "#fff", fontSize: 16, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3
+            }}
+          >‹</button>
         )}
 
-{event.show_booth_count && event.booths > 0 && (
-  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.8)" }}>🎪 {event.booths} booths</span>
-)}
-
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0.1))" }} />
-        <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", marginBottom: 3 }}>
-            {event.date !== "TBD" && `📅 ${event.date} · `}{event.location?.split(",")[0]}
-          </div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 6 }}>{event.name}</div>
-          
-          
-<div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
-  <span style={{ background: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 700, color: Orange }}>{event.price}</span>
-</div>
-
-        </div>
+        {/* Right arrow */}
+        {events.length > 1 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            style={{
+              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+              width: 30, height: 30, borderRadius: "50%", border: "none",
+              background: "rgba(0,0,0,0.4)", color: "#fff", fontSize: 16, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3
+            }}
+          >›</button>
+        )}
 
         {/* Dots */}
         {events.length > 1 && (
-          <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center" }}>
+          <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center", zIndex: 3 }}>
             {events.map((_, i) => (
               <div
                 key={i}
@@ -3336,6 +3441,9 @@ const [showPasswordReset, setShowPasswordReset] = useState(false);
 const [newPassword, setNewPassword] = useState("");
 const [passwordResetDone, setPasswordResetDone] = useState(false);
 
+const [userCity, setUserCity] = useState("");
+const [userCoords, setUserCoords] = useState(null);
+
   const t = translations[lang];
   const isAr = lang === "ar";
 
@@ -3359,6 +3467,46 @@ useEffect(() => {
     }
   });
   return () => subscription.unsubscribe();
+}, []);
+
+
+useEffect(() => {
+  const fetchByIP = async () => {
+    try {
+      const res = await fetch("https://ipapi.co/json/");
+      const data = await res.json();
+      if (data.city) setUserCity(data.city);
+      if (data.latitude && data.longitude) {
+        setUserCoords({ lat: data.latitude, lng: data.longitude });
+      }
+    } catch (err) {
+      console.error("IP location failed:", err);
+    }
+  };
+
+  if (navigator.geolocation && window.isSecureContext) {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setUserCoords({ lat: latitude, lng: longitude });
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
+            { headers: { "Accept-Language": "en", "User-Agent": "ateventi/1.0" } }
+          );
+          const data = await res.json();
+          const city = data.address?.city || data.address?.state || data.address?.suburb || data.address?.country || "";
+          setUserCity(city);
+        } catch (err) {
+          console.error(err);
+        }
+      },
+      () => fetchByIP(),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  } else {
+    fetchByIP();
+  }
 }, []);
 
  useEffect(() => {
@@ -3398,8 +3546,18 @@ useEffect(() => {
     setShowProfile(false);
   };
 
-  const filteredEvents = selectedCategory === "All"
-    ? events : events.filter(e => e.category === selectedCategory);
+ const filteredEvents = (selectedCategory === "All"
+  ? events
+  : events.filter(e =>
+      (e.categories && e.categories.includes(selectedCategory)) ||
+      e.category === selectedCategory
+    )
+).slice().sort((a, b) => {
+  if (!userCoords) return 0;
+  const distA = getDistanceKm(userCoords.lat, userCoords.lng, Number(a.lat), Number(a.lng));
+  const distB = getDistanceKm(userCoords.lat, userCoords.lng, Number(b.lat), Number(b.lng));
+  return distA - distB;
+});
 
     if (showPasswordReset) return (
   <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", padding: 24, background: "#f8f8f8" }}>
@@ -3479,12 +3637,16 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
   <img src="/faviconapp.png" alt="eventi" style={{ height: 32, width: 32, objectFit: "contain" }} />
   <div style={{ fontWeight: 700, fontSize: 22, color: "#111" }}>{t.title}</div>
 </div>
+
+{userCity && (
+  <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>
+    📍 {userCity}
+  </div>
+)}
           
           
           
-            <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>
-              <span style={{ color: Orange, fontWeight: 700 }}>{events.length}</span> {t.subtitle}
-            </div>
+           
 
 
           </div>
