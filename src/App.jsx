@@ -15,6 +15,20 @@ const shortLocation = (location) => {
   return location.split(",")[0].trim();
 };
 
+const formatTime12 = (t) => {
+  if (!t) return "";
+  const [h, m] = t.split(":");
+  let hour = parseInt(h);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${hour}:${m} ${ampm}`;
+};
+const buildTimeRange = (from, to) => {
+  if (from && to) return `${formatTime12(from)} - ${formatTime12(to)}`;
+  if (from) return formatTime12(from);
+  return "";
+};
+
 const getDistanceKm = (lat1, lng1, lat2, lng2) => {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -711,7 +725,7 @@ const [floorMapUrl, setFloorMapUrl] = useState("");
 
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  //const [time, setTime] = useState("");
   const [price, setPrice] = useState("");
   const [booths, setBooths] = useState("");
   const [description, setDescription] = useState("");
@@ -742,6 +756,14 @@ const [isFeatured, setIsFeatured] = useState(false);
 const [showReserveButton, setShowReserveButton] = useState(true);
 
 const [showHost, setShowHost] = useState(true);
+
+
+const [timeFrom, setTimeFrom] = useState("");
+const [timeTo, setTimeTo] = useState("");
+
+
+
+const [editImages, setEditImages] = useState([]);
 
 
 
@@ -841,7 +863,7 @@ useEffect(() => {
         date: date || "TBD", price: price || "FREE",
         lat: lat, lng: lng,
         description: description || "No description provided.",
-        host: "eventi organizer", time: time || "TBD",
+        host: "eventi", time: buildTimeRange(timeFrom, timeTo) || "TBD",
         booths: parseInt(booths) || 10, location,
       };
       const { data, error: sbError } = await supabase.from("events").insert([newEvent]).select();
@@ -1077,16 +1099,26 @@ if (published) return (
   )}
 </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.date}</label>
-              <input style={inputStyle} placeholder="22 Sep 2024" value={date} onChange={e => setDate(e.target.value)} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.time}</label>
-              <input style={inputStyle} placeholder="10am-6pm" value={time} onChange={e => setTime(e.target.value)} />
-            </div>
-          </div>
+        {/* Date picker */}
+<div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.date} <span style={{ color: "#ccc" }}>(optional)</span></label>
+  <input type="date" style={inputStyle} value={date} onChange={e => setDate(e.target.value)} />
+</div>
+
+{/* Time range pickers */}
+<div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.time} <span style={{ color: "#ccc" }}>(optional)</span></label>
+  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div style={{ flex: 1 }}>
+      <span style={{ fontSize: 10, color: "#999" }}>From</span>
+      <input type="time" style={inputStyle} value={timeFrom} onChange={e => setTimeFrom(e.target.value)} />
+    </div>
+    <div style={{ flex: 1 }}>
+      <span style={{ fontSize: 10, color: "#999" }}>To</span>
+      <input type="time" style={inputStyle} value={timeTo} onChange={e => setTimeTo(e.target.value)} />
+    </div>
+  </div>
+</div>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.price}</label>
@@ -1326,7 +1358,13 @@ if (published) return (
         </div>
        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
 <button
-  onClick={(e) => { e.stopPropagation(); setEditingEvent(event); }}
+  onClick={async (e) => {
+    e.stopPropagation();
+    setEditingEvent(event);
+    const { data } = await supabase.from("event_images").select("*").eq("event_id", event.id).order("sort_order", { ascending: true });
+    setEditImages(data && data.length > 0 ? data.map(i => i.image_url) : (event.image_url ? [event.image_url] : []));
+  }}
+
   style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
 >
   ✏️ Edit
@@ -1348,142 +1386,173 @@ if (published) return (
       <div style={{ width: 40, height: 4, background: "#eee", borderRadius: 2, margin: "0 auto 20px" }} />
       <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>✏️ Edit Event</div>
 
-    {[
-  { label: "Event Name", key: "name" },
-  { label: "Price", key: "price" },
-].map(field => (
-  <div key={field.key} style={{ marginBottom: 10 }}>
-    <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{field.label}</label>
-    <input
-      value={editingEvent[field.key] || ""}
-      onChange={e => setEditingEvent(prev => ({ ...prev, [field.key]: e.target.value }))}
-      style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-    />
-  </div>
-))}
-
-
-      {/* Location with autocomplete */}
-<div style={{ marginBottom: 10, position: "relative" }}>
-  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Location</label>
-  <input
-    value={editingEvent.location || ""}
-    onChange={async (e) => {
-      setEditingEvent(prev => ({ ...prev, location: e.target.value }));
-      if (e.target.value.length < 2) { setLocationSuggestions([]); return; }
-      clearTimeout(window.locationTimeout);
-      window.locationTimeout = setTimeout(async () => {
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw&accept-language=en`,
-            { headers: { "Accept-Language": "en", "User-Agent": "ateventi/1.0" } }
-          );
-          const data = await res.json();
-          setLocationSuggestions(data.map(place => ({
-            formatted_address: place.display_name,
-            geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
-          })));
-        } catch (err) { console.error(err); }
-      }, 400);
-    }}
-    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-    placeholder="Search for a location..."
-  />
-  {locationSuggestions.length > 0 && (
-    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
-      {locationSuggestions.map((place, i) => (
-        <div
-          key={i}
-          onClick={() => {
-            setEditingEvent(prev => ({
-              ...prev,
-              location: place.formatted_address,
-              lat: place.geometry.location.lat,
-              lng: place.geometry.location.lng
-            }));
-            setLocationSuggestions([]);
-          }}
-          style={{ padding: "10px 14px", fontSize: 13, color: "#111", cursor: "pointer", borderBottom: "1px solid #f5f5f5" }}
-          onMouseEnter={e => e.currentTarget.style.background = "#f8f8f8"}
-          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
-        >
-          📍 {place.formatted_address}
+      {[
+        { label: "Event Name", key: "name" },
+        { label: "Price", key: "price" },
+      ].map(field => (
+        <div key={field.key} style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{field.label}</label>
+          <input
+            value={editingEvent[field.key] || ""}
+            onChange={e => setEditingEvent(prev => ({ ...prev, [field.key]: e.target.value }))}
+            style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+          />
         </div>
       ))}
+
+      {/* Location with autocomplete */}
+      <div style={{ marginBottom: 10, position: "relative" }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Location</label>
+        <input
+          value={editingEvent.location || ""}
+          onChange={async (e) => {
+            setEditingEvent(prev => ({ ...prev, location: e.target.value }));
+            if (e.target.value.length < 2) { setLocationSuggestions([]); return; }
+            clearTimeout(window.locationTimeout);
+            window.locationTimeout = setTimeout(async () => {
+              try {
+                const res = await fetch(
+                  `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw&accept-language=en`,
+                  { headers: { "Accept-Language": "en", "User-Agent": "ateventi/1.0" } }
+                );
+                const data = await res.json();
+                setLocationSuggestions(data.map(place => ({
+                  formatted_address: place.display_name,
+                  geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } }
+                })));
+              } catch (err) { console.error(err); }
+            }, 400);
+          }}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+          placeholder="Search for a location..."
+        />
+        {locationSuggestions.length > 0 && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
+            {locationSuggestions.map((place, i) => (
+              <div key={i}
+                onClick={() => {
+                  setEditingEvent(prev => ({ ...prev, location: place.formatted_address, lat: place.geometry.location.lat, lng: place.geometry.location.lng }));
+                  setLocationSuggestions([]);
+                }}
+                style={{ padding: "10px 14px", fontSize: 13, color: "#111", cursor: "pointer", borderBottom: "1px solid #f5f5f5" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#f8f8f8"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+              >📍 {place.formatted_address}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Date */}
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Date</label>
+        <input type="date" value={editingEvent.date || ""} onChange={e => setEditingEvent(prev => ({ ...prev, date: e.target.value }))}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+      </div>
+
+      {/* Time */}
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Time</label>
+        <input type="time" value={editingEvent.time || ""} onChange={e => setEditingEvent(prev => ({ ...prev, time: e.target.value }))}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+      </div>
+
+      {/* Description */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Description</label>
+        <textarea value={editingEvent.description || ""} onChange={e => setEditingEvent(prev => ({ ...prev, description: e.target.value }))}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", minHeight: 80, resize: "vertical" }} />
+      </div>
+
+      {/* Images add/delete */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>Event Images</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+          {(editImages || []).map((img, i) => (
+            <div key={i} style={{ position: "relative", height: 72, borderRadius: 8, overflow: "hidden", border: i === 0 ? `2px solid ${Orange}` : "0.5px solid #eee" }}>
+              <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              {i === 0 && <div style={{ position: "absolute", bottom: 3, left: 3, background: Orange, borderRadius: 4, padding: "1px 5px", fontSize: 9, color: "#fff" }}>Cover</div>}
+              <button onClick={() => setEditImages(prev => prev.filter((_, idx) => idx !== i))}
+                style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 10, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          {(editImages || []).length < 10 && (
+            <label style={{ height: 72, borderRadius: 8, border: "1px dashed #ddd", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", background: "#f8f8f8" }}>
+              <span style={{ fontSize: 20, color: Orange }}>+</span>
+              <span style={{ fontSize: 10, color: "#999" }}>Add</span>
+              <input type="file" accept="image/*" multiple style={{ display: "none" }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files);
+                  for (const file of files) {
+                    if ((editImages || []).length >= 10) break;
+                    const fileName = `${Math.random()}.${file.name.split(".").pop()}`;
+                    const { error: upErr } = await supabase.storage.from("event-image").upload(fileName, file);
+                    if (upErr) { console.error(upErr); continue; }
+                    const { data: urlData } = supabase.storage.from("event-image").getPublicUrl(fileName);
+                    setEditImages(prev => [...(prev || []), urlData.publicUrl]);
+                  }
+                }} />
+            </label>
+          )}
+        </div>
+      </div>
+
+      {/* Reserve booth toggle */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12, marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show "Reserve a Booth"</div>
+          <div style={{ fontSize: 11, color: "#999" }}>Let attendees reserve booths</div>
+        </div>
+        <div onClick={() => setEditingEvent(prev => ({ ...prev, show_booths: !(prev.show_booths !== false) }))}
+          style={{ width: 44, height: 24, borderRadius: 12, background: editingEvent.show_booths !== false ? Orange : "#ddd", position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+          <div style={{ position: "absolute", top: 2, left: editingEvent.show_booths !== false ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+        </div>
+      </div>
+
+      <button
+        onClick={async () => {
+          try {
+            const { error } = await supabase.from("events").update({
+              name: editingEvent.name,
+              location: editingEvent.location,
+              lat: editingEvent.lat,
+              lng: editingEvent.lng,
+              date: editingEvent.date,
+              time: editingEvent.time,
+              price: editingEvent.price,
+              description: editingEvent.description,
+              show_booths: editingEvent.show_booths !== false,
+              image_url: editImages?.[0] || "",
+            }).eq("id", editingEvent.id);
+            if (error) throw error;
+
+            // Sync images table
+            await supabase.from("event_images").delete().eq("event_id", editingEvent.id);
+            if (editImages && editImages.length > 0) {
+              await supabase.from("event_images").insert(
+                editImages.map((url, i) => ({ event_id: editingEvent.id, image_url: url, is_cover: i === 0, sort_order: i }))
+              );
+            }
+
+            const updated = { ...editingEvent, image_url: editImages?.[0] || "" };
+            setMyEvents(prev => prev.map(e => e.id === editingEvent.id ? updated : e));
+            setEditingEvent(null);
+            alert("✅ Event updated!");
+          } catch (err) {
+            console.error(err);
+            alert("Failed to update: " + err.message);
+          }
+        }}
+        style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
+      >
+        💾 Save Changes
+      </button>
+      <button onClick={() => setEditingEvent(null)}
+        style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}>
+        Cancel
+      </button>
     </div>
-  )}
-</div>
-
-
-    {/* Date picker */}
-<div style={{ marginBottom: 10 }}>
-  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Date</label>
-  <input
-    type="date"
-    value={editingEvent.date || ""}
-    onChange={e => setEditingEvent(prev => ({ ...prev, date: e.target.value }))}
-    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-  />
-</div>
-
-      
-{/* Time picker */}
-<div style={{ marginBottom: 10 }}>
-  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Time</label>
-  <input
-    type="time"
-    value={editingEvent.time || ""}
-    onChange={e => setEditingEvent(prev => ({ ...prev, time: e.target.value }))}
-    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-  />
-</div>
-
-{/* Description */}
-<div style={{ marginBottom: 16 }}>
-  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Description</label>
-  <textarea
-    value={editingEvent.description || ""}
-    onChange={e => setEditingEvent(prev => ({ ...prev, description: e.target.value }))}
-    style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", minHeight: 80, resize: "vertical" }}
-  />
-</div>
-    
-    <button
-  onClick={async () => {
-    try {
-      const { error } = await supabase
-        .from("events")
-        .update({
-          name: editingEvent.name,
-          location: editingEvent.location,
-          lat: editingEvent.lat,
-          lng: editingEvent.lng,
-          date: editingEvent.date,
-          time: editingEvent.time,
-          price: editingEvent.price,
-          description: editingEvent.description,
-        })
-        .eq("id", editingEvent.id);
-      if (error) throw error;
-      setMyEvents(prev => prev.map(e => e.id === editingEvent.id ? editingEvent : e));
-      setEditingEvent(null);
-      alert("✅ Event updated!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to update: " + err.message);
-    }
-  }}
-  style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
->
-  💾 Save Changes
-</button>
-<button onClick={() => setEditingEvent(null)}
-  style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}
->
-  Cancel
-</button>
-</div>
-</div>
+  </div>
 )}
     </div>
   );
@@ -1524,9 +1593,14 @@ const [resetLoading, setResetLoading] = useState(false);
       if (isLogin) {
         const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
         if (authError) throw authError;
-      } else {
-        if (!name) { setError("Please enter your name"); setLoading(false); return; }
-        const { error: authError } = await supabase.auth.signUp({
+     } else {
+  if (!name) { setError("Please enter your name"); setLoading(false); return; }
+  if (name.trim().toLowerCase() === "eventi") {
+    setError('The name "eventi" is reserved. Please choose another name.');
+    setLoading(false);
+    return;
+  }
+  const { error: authError } = await supabase.auth.signUp({
           email, password,
           options: { data: { name } }
         });
@@ -1768,13 +1842,16 @@ const [profileSaved, setProfileSaved] = useState(false);
           <div style={{ fontWeight: 700, fontSize: 18, color: "#111" }}>{userProfile?.name || user.email}</div>
           <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>{user.email}</div>
           <div style={{ marginTop: 8 }}>
-            <span style={{
-              padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: userProfile?.role === "admin" ? "#FFEBEE" : userProfile?.role === "organizer" ? "#F3E8FF" : "#E8FDF5",
-              color: userProfile?.role === "admin" ? "#c62828" : userProfile?.role === "organizer" ? "#6B21A8" : "#065F46"
-            }}>
-              {userProfile?.role === "admin" ? "👑 Admin" : userProfile?.role === "organizer" ? "🎪 Organizer" : "🎉 Consumer"}
-            </span>
+            
+            {userProfile?.role !== "consumer" && (
+  <span style={{
+    padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+    background: userProfile?.role === "admin" ? "#FFEBEE" : "#F3E8FF",
+    color: userProfile?.role === "admin" ? "#c62828" : "#6B21A8"
+  }}>
+    {userProfile?.role === "admin" ? "👑 Admin" : "🎪 Organizer"}
+  </span>
+)}
 
             <button
   onClick={async () => {
@@ -1944,13 +2021,17 @@ const [profileSaved, setProfileSaved] = useState(false);
       )}
 
       <button
-        onClick={async () => {
-          setSavingProfile(true);
-          try {
-            await supabase.from("users").update({
-              name: editName,
-              phone: editPhone,
-            }).eq("id", user.id);
+      onClick={async () => {
+  if (editName.trim().toLowerCase() === "eventi" && userProfile?.role !== "admin") {
+    alert('The name "eventi" is reserved. Please choose another name.');
+    return;
+  }
+  setSavingProfile(true);
+  try {
+    await supabase.from("users").update({
+      name: editName,
+      phone: editPhone,
+    }).eq("id", user.id);
 
             if (editEmail !== user.email) {
               await supabase.auth.updateUser({ email: editEmail });
@@ -2010,7 +2091,7 @@ const [publishedEvent, setPublishedEvent] = useState(null);
 
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  
   const [price, setPrice] = useState("");
   const [booths, setBooths] = useState("");
   const [description, setDescription] = useState("");
@@ -2028,6 +2109,13 @@ const [publishedEvent, setPublishedEvent] = useState(null);
 const [showReserveButton, setShowReserveButton] = useState(true);
 
 const [showHost, setShowHost] = useState(true);
+
+
+const [timeFrom, setTimeFrom] = useState("");
+const [timeTo, setTimeTo] = useState("");
+
+const [editingEvent, setEditingEvent] = useState(null);
+const [editImages, setEditImages] = useState([]);
 
 
   useEffect(() => {
@@ -2086,7 +2174,7 @@ const [showHost, setShowHost] = useState(true);
         lat: lat, lng: lng,
         description: description || "No description provided.",
         host: userProfile?.name || "Organizer",
-        time: time || "TBD", booths: parseInt(booths) || 10, location,
+        time: buildTimeRange(timeFrom, timeTo) || "TBD", booths: parseInt(booths) || 10, location,
       };
       const { data, error: sbError } = await supabase.from("events").insert([newEvent]).select();
       if (sbError) throw sbError;
@@ -2237,18 +2325,41 @@ if (published) return (
     </div>
   )}
 </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.date}</label>
-              <input style={inputStyle} placeholder="22 Sep 2024" value={date} onChange={e => setDate(e.target.value)} /></div>
-            <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.time}</label>
-              <input style={inputStyle} placeholder="10am-6pm" value={time} onChange={e => setTime(e.target.value)} /></div>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.price}</label>
-              <input style={inputStyle} placeholder="FREE or $10" value={price} onChange={e => setPrice(e.target.value)} /></div>
-            <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.noOfBooths}</label>
-              <input style={inputStyle} placeholder="20" value={booths} onChange={e => setBooths(e.target.value)} type="number" /></div>
-          </div>
+          {/* Date picker */}
+<div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.date} <span style={{ color: "#ccc" }}>(optional)</span></label>
+  <input type="date" style={inputStyle} value={date} onChange={e => setDate(e.target.value)} />
+</div>
+
+{/* Time range pickers */}
+<div>
+  <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.time} <span style={{ color: "#ccc" }}>(optional)</span></label>
+  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div style={{ flex: 1 }}>
+      <span style={{ fontSize: 10, color: "#999" }}>From</span>
+      <input type="time" style={inputStyle} value={timeFrom} onChange={e => setTimeFrom(e.target.value)} />
+    </div>
+    <div style={{ flex: 1 }}>
+      <span style={{ fontSize: 10, color: "#999" }}>To</span>
+      <input type="time" style={inputStyle} value={timeTo} onChange={e => setTimeTo(e.target.value)} />
+    </div>
+  </div>
+</div>
+
+
+
+
+{/* Price and Booths */}
+<div style={{ display: "flex", gap: 10 }}>
+  <div style={{ flex: 1 }}>
+    <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.price}</label>
+    <input style={inputStyle} placeholder="FREE or $10" value={price} onChange={e => setPrice(e.target.value)} />
+  </div>
+  <div style={{ flex: 1 }}>
+    <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{t.noOfBooths}</label>
+    <input style={inputStyle} placeholder="20" value={booths} onChange={e => setBooths(e.target.value)} type="number" />
+  </div>
+</div>
 
 
 {/* Multi-image upload */}
@@ -2535,14 +2646,170 @@ if (published) return (
           <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>📅 {event.date} · {event.time}</div>
           <div style={{ fontSize: 11, color: Orange, fontWeight: 600, marginTop: 2 }}>{event.price}</div>
         </div>
-       <button
-  onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-  style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
->
-  🗑️ Delete Event
-</button>
+       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+  <button
+    onClick={async (e) => {
+      e.stopPropagation();
+      setEditingEvent(event);
+      const { data } = await supabase.from("event_images").select("*").eq("event_id", event.id).order("sort_order", { ascending: true });
+      setEditImages(data && data.length > 0 ? data.map(i => i.image_url) : (event.image_url ? [event.image_url] : []));
+    }}
+    style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+  >
+    ✏️ Edit
+  </button>
+  <button
+    onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+    style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#FFEBEE", color: "#c62828", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+  >
+    🗑️ Delete
+  </button>
+</div>
       </div>
-    ))}
+
+  ))}
+  </div>
+)}
+
+{editingEvent && (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
+    <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: 24, width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ width: 40, height: 4, background: "#eee", borderRadius: 2, margin: "0 auto 20px" }} />
+      <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>✏️ Edit Event</div>
+
+      {[
+        { label: "Event Name", key: "name" },
+        { label: "Price", key: "price" },
+      ].map(field => (
+        <div key={field.key} style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>{field.label}</label>
+          <input value={editingEvent[field.key] || ""} onChange={e => setEditingEvent(prev => ({ ...prev, [field.key]: e.target.value }))}
+            style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+        </div>
+      ))}
+
+      <div style={{ marginBottom: 10, position: "relative" }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Location</label>
+        <input value={editingEvent.location || ""}
+          onChange={async (e) => {
+            setEditingEvent(prev => ({ ...prev, location: e.target.value }));
+            if (e.target.value.length < 2) { setLocationSuggestions([]); return; }
+            clearTimeout(window.locationTimeout);
+            window.locationTimeout = setTimeout(async () => {
+              try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(e.target.value)}&format=json&limit=4&countrycodes=kw&accept-language=en`, { headers: { "Accept-Language": "en", "User-Agent": "ateventi/1.0" } });
+                const data = await res.json();
+                setLocationSuggestions(data.map(place => ({ formatted_address: place.display_name, geometry: { location: { lat: parseFloat(place.lat), lng: parseFloat(place.lon) } } })));
+              } catch (err) { console.error(err); }
+            }, 400);
+          }}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+          placeholder="Search for a location..." />
+        {locationSuggestions.length > 0 && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 100, overflow: "hidden" }}>
+            {locationSuggestions.map((place, i) => (
+              <div key={i} onClick={() => { setEditingEvent(prev => ({ ...prev, location: place.formatted_address, lat: place.geometry.location.lat, lng: place.geometry.location.lng })); setLocationSuggestions([]); }}
+                style={{ padding: "10px 14px", fontSize: 13, color: "#111", cursor: "pointer", borderBottom: "1px solid #f5f5f5" }}>📍 {place.formatted_address}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Date</label>
+        <input type="date" value={editingEvent.date || ""} onChange={e => setEditingEvent(prev => ({ ...prev, date: e.target.value }))}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Time</label>
+        <input type="time" value={editingEvent.time || ""} onChange={e => setEditingEvent(prev => ({ ...prev, time: e.target.value }))}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 4 }}>Description</label>
+        <textarea value={editingEvent.description || ""} onChange={e => setEditingEvent(prev => ({ ...prev, description: e.target.value }))}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #eee", background: "#f8f8f8", fontSize: 13, outline: "none", boxSizing: "border-box", minHeight: 80, resize: "vertical" }} />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 12, color: "#999", display: "block", marginBottom: 8 }}>Event Images</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+          {(editImages || []).map((img, i) => (
+            <div key={i} style={{ position: "relative", height: 72, borderRadius: 8, overflow: "hidden", border: i === 0 ? `2px solid ${Orange}` : "0.5px solid #eee" }}>
+              <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              {i === 0 && <div style={{ position: "absolute", bottom: 3, left: 3, background: Orange, borderRadius: 4, padding: "1px 5px", fontSize: 9, color: "#fff" }}>Cover</div>}
+              <button onClick={() => setEditImages(prev => prev.filter((_, idx) => idx !== i))}
+                style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 10, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          {(editImages || []).length < 10 && (
+            <label style={{ height: 72, borderRadius: 8, border: "1px dashed #ddd", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", background: "#f8f8f8" }}>
+              <span style={{ fontSize: 20, color: Orange }}>+</span>
+              <span style={{ fontSize: 10, color: "#999" }}>Add</span>
+              <input type="file" accept="image/*" multiple style={{ display: "none" }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files);
+                  for (const file of files) {
+                    if ((editImages || []).length >= 10) break;
+                    const fileName = `${Math.random()}.${file.name.split(".").pop()}`;
+                    const { error: upErr } = await supabase.storage.from("event-image").upload(fileName, file);
+                    if (upErr) { console.error(upErr); continue; }
+                    const { data: urlData } = supabase.storage.from("event-image").getPublicUrl(fileName);
+                    setEditImages(prev => [...(prev || []), urlData.publicUrl]);
+                  }
+                }} />
+            </label>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12, marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>🎪 Show "Reserve a Booth"</div>
+          <div style={{ fontSize: 11, color: "#999" }}>Let attendees reserve booths</div>
+        </div>
+        <div onClick={() => setEditingEvent(prev => ({ ...prev, show_booths: !(prev.show_booths !== false) }))}
+          style={{ width: 44, height: 24, borderRadius: 12, background: editingEvent.show_booths !== false ? Orange : "#ddd", position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+          <div style={{ position: "absolute", top: 2, left: editingEvent.show_booths !== false ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+        </div>
+      </div>
+
+      <button
+        onClick={async () => {
+          try {
+            const { error } = await supabase.from("events").update({
+              name: editingEvent.name, location: editingEvent.location,
+              lat: editingEvent.lat, lng: editingEvent.lng,
+              date: editingEvent.date, time: editingEvent.time,
+              price: editingEvent.price, description: editingEvent.description,
+              show_booths: editingEvent.show_booths !== false,
+              image_url: editImages?.[0] || "",
+            }).eq("id", editingEvent.id);
+            if (error) throw error;
+            await supabase.from("event_images").delete().eq("event_id", editingEvent.id);
+            if (editImages && editImages.length > 0) {
+              await supabase.from("event_images").insert(editImages.map((url, i) => ({ event_id: editingEvent.id, image_url: url, is_cover: i === 0, sort_order: i })));
+            }
+            const updated = { ...editingEvent, image_url: editImages?.[0] || "" };
+            setMyEvents(prev => prev.map(e => e.id === editingEvent.id ? updated : e));
+            setEditingEvent(null);
+            alert("✅ Event updated!");
+          } catch (err) {
+            console.error(err);
+            alert("Failed to update: " + err.message);
+          }
+        }}
+        style={{ width: "100%", padding: 14, borderRadius: 16, border: "none", background: Orange, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
+      >
+        💾 Save Changes
+      </button>
+      <button onClick={() => setEditingEvent(null)}
+        style={{ width: "100%", padding: 10, borderRadius: 16, border: "none", background: "transparent", color: "#999", fontSize: 13, cursor: "pointer" }}>
+        Cancel
+      </button>
+    </div>
   </div>
 )}
     </div>
@@ -3115,11 +3382,15 @@ function VisitorProfile({ onClose, lang, visitorInfo, onSave, onLoginClick }) {
     }
   };
 
-  const handleSave = () => {
-    onSave({ name, email, avatar_url: avatarUrl });
-    setSaved(true);
-    setTimeout(() => { setSaved(false); onClose(); }, 1000);
-  };
+const handleSave = () => {
+  if (name.trim().toLowerCase() === "eventi") {
+    alert('The name "eventi" is reserved. Please choose another name.');
+    return;
+  }
+  onSave({ name, email, avatar_url: avatarUrl });
+  setSaved(true);
+  setTimeout(() => { setSaved(false); onClose(); }, 1000);
+};
 
   const inputStyle = {
     width: "100%", padding: "10px 14px", borderRadius: 12,
@@ -3455,6 +3726,8 @@ useEffect(() => {
     setShowProfile(false);
   };
 
+  //sort events by distance if user location is available, otherwise keep default order
+
  const filteredEvents = (selectedCategory === "All"
   ? events
   : events.filter(e =>
@@ -3542,9 +3815,11 @@ if (!user && !isVisitor) return <AuthScreen onAuth={(type) => { if (type === "vi
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
 
-           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+ <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
   <img src="/faviconapp.png" alt="eventi" style={{ height: 32, width: 32, objectFit: "contain" }} />
-  <div style={{ fontWeight: 700, fontSize: 22, color: "#111" }}>{t.title}</div>
+  <div style={{ fontWeight: 700, fontSize: 22, color: "#111" }}>
+    {userProfile?.name ? `Hi, ${userProfile.name.split(" ")[0]}!` : t.title}
+  </div>
 </div>
 
 {userCity && (
