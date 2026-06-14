@@ -1509,10 +1509,25 @@ if (published) return (
         </div>
       </div>
 
+
+
+{/* Featured toggle (admin only) */}
+<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8f8f8", borderRadius: 12, marginBottom: 16 }}>
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>⭐ Add to Featured</div>
+    <div style={{ fontSize: 11, color: "#999" }}>Show this event in the featured slider</div>
+  </div>
+  <div onClick={() => setEditingEvent(prev => ({ ...prev, featured: !prev.featured }))}
+    style={{ width: 44, height: 24, borderRadius: 12, background: editingEvent.featured ? Orange : "#ddd", position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+    <div style={{ position: "absolute", top: 2, left: editingEvent.featured ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+  </div>
+</div>
+
       <button
         onClick={async () => {
           try {
-            const { error } = await supabase.from("events").update({
+            
+const { error } = await supabase.from("events").update({
               name: editingEvent.name,
               location: editingEvent.location,
               lat: editingEvent.lat,
@@ -1521,7 +1536,8 @@ if (published) return (
               time: editingEvent.time,
               price: editingEvent.price,
               description: editingEvent.description,
-              show_booths: editingEvent.show_booths !== false,
+             show_booths: editingEvent.show_booths !== false,
+              featured: editingEvent.featured || false,
               image_url: editImages?.[0] || "",
             }).eq("id", editingEvent.id);
             if (error) throw error;
@@ -2785,7 +2801,8 @@ if (published) return (
               date: editingEvent.date, time: editingEvent.time,
               price: editingEvent.price, description: editingEvent.description,
               show_booths: editingEvent.show_booths !== false,
-              image_url: editImages?.[0] || "",
+featured: editingEvent.featured || false,
+image_url: editImages?.[0] || "",
             }).eq("id", editingEvent.id);
             if (error) throw error;
             await supabase.from("event_images").delete().eq("event_id", editingEvent.id);
